@@ -1,0 +1,31 @@
+{
+  "name": "svelte-app",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "rollup -c",
+    "dev": "rollup -c -w",
+    "https": "budo --dir ./public --live --ssl -C server.crt -K server.key --port=8080 --cors",
+    "start": "sirv public --host 0.0.0.0",
+    "server": "nodemon server.js"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "11.0.2",
+    "@rollup/plugin-json": "^4.0.3",
+    "@rollup/plugin-node-resolve": "^7.0.0",
+    "rollup": "^1.20.0",
+    "rollup-plugin-livereload": "^1.0.0",
+    "rollup-plugin-svelte": "^5.0.3",
+    "rollup-plugin-terser": "^5.1.2",
+    "svelte": "^3.0.0"
+  },
+  "dependencies": {
+    "axios": "^0.19.2",
+    "cors": "^2.8.5",
+    "express": "^4.17.1",
+    "matter-js": "^0.14.2",
+    "p2": "^0.7.1",
+    "sirv-cli": "^0.4.4",
+    "stats-js": "^1.0.1",
+    "three": "^0.116.1"
+  }
+}
