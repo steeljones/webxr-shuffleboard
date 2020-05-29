@@ -9,22 +9,22 @@
  export let showDebug;
   
  import * as THREE from 'three';
-  //import { p2 } from '/p2/src/p2.js'
- import { Body, World, Circle, Plane, Box, DistanceConstraint, PrismaticConstraint, vec2 } from "p2";
-
- 
+ import { Body, World, Circle, Plane, Box, Convex, DistanceConstraint, PrismaticConstraint, vec2 } from "p2";
  import Stats from 'stats-js';
  import { createEventDispatcher, tick } from 'svelte';
 
+ import scoringAreas from './scoringAreas';
+ window.scoringAreas = scoringAreas;
  const dispatch = createEventDispatcher();
 
- let canvas;
- let camera, scene, renderer;
- let controller;
+ 
 
+ let DEV_MODE = window.location.search.includes( 'dev' );
 
  //Variables for app created three / p2 objects
- let reticle,
+ let canvas, camera, scene, renderer,
+     controller,
+     reticle,
      cursor = new THREE.Vector3(),
      cursorMat = new THREE.Matrix4(),
      cursorPos = new THREE.Vector3(),
@@ -37,6 +37,7 @@
      anchor,
      court,
      discs = [],
+     cueShape,
      cueBody,
      cue,
      showCue = false,
@@ -59,7 +60,6 @@
      maxSubSteps;
 
  //p2/three parameter variables
- let throwFactor = 6 * 1;
  let anchorHeight = .2;
  let gameScale = 1 / 2;
  let courtWidth = 1.5 * gameScale;
@@ -68,11 +68,24 @@
  let discRadius = .05;
  let discHeight = .01;
  let discMass = .425 * gameScale;//kg - not sure if it should be changed to grams
-
  let cueWidth = discRadius * 4;
  let cueHeight = discRadius;
  let cueDepth = discRadius;
- 
+ let cueConstraintLength = .25;
+
+ //Collison Masks
+ let SCORINGAREAS = Math.pow(2, 0);
+ let BOUNDS = Math.pow(2, 1);
+ let REDCUE = Math.pow( 2, 2);
+ let BLUECUE = Math.pow( 2, 3);
+ let REDDISCS = Math.pow( 2, 4);
+ let BLUEDISCS = Math.pow( 2, 5);
+
+
+ //Game state variables
+ let currentPlayer = 'open';
+ let currentTurnNumber;
+ let scoreAreas = [];
  
 
  let lockUI = false;
@@ -87,6 +100,7 @@
    initP2Physics();
    initScene();
    initCourt();
+   addScoreSensors();
    initDiscs();
    animate();
 
@@ -183,10 +197,16 @@
          addBounds();
          setDiscs();
          initCue();
+         setCueCollisions();
        }
        break;
+     case 'inactive':
+       startGame();
+       break;
      case 'throw':
-       throwDisc();
+       if(DEV_MODE){
+         throwCurrentDisc();
+       }
        break;
    }
  }
@@ -429,7 +449,7 @@
  }
 
  function setCourt(){
-   dispatch('changeControls', { controlType: 'throw' });
+   dispatch('changeControls', { controlType: 'inactive' });
    court.material.opacity = 1.0;
    courtSet = true;
  }
@@ -437,12 +457,21 @@
  function initDiscs(){
    let discGeometry = new THREE.CylinderBufferGeometry( discRadius, discRadius, discHeight, 32, 1 );
 
-   for(let i = 0; i < 30; i++) {
-     let color = i < 4 ? 0xff0000 : 0x0000ff;
-     let material = new THREE.MeshBasicMaterial( {color} );
+   let numDiscs = 8;
+   for(let i = 0; i < numDiscs; i++) {
+     let material = new THREE.MeshBasicMaterial( );
      let disc = new THREE.Mesh( discGeometry, material );
      disc.userData.discNumber = i;
      disc.visible = false;
+
+     if(i % 2 == 0){
+       disc.material.color.setHex(0xff0000);
+       disc.discColor = 'red';
+     }else{
+       disc.material.color.setHex(0x0000ff);
+       disc.discColor = 'blue'
+     }
+
      scene.add(disc);     
      discs.push( disc );
    }
@@ -452,31 +481,47 @@
  function setDiscs(){
    let pos = new THREE.Vector3();
    court.getWorldPosition( pos );
+
    discs.forEach( (disc, idx) => {
      let x = 0;
      let z = (idx - 2) * courtLength / 16;
      disc.position.set(x, .6, z)
      disc.applyMatrix4( court.matrixWorld );
-
-     let circleBody = new Body({mass: discMass, position: [x, z]});
+     
      let circleShape = new Circle({radius: discRadius})
+     circleShape.threeObj = disc;
+     if(disc.discColor == 'red'){
+       circleShape.collisionGroup = REDDISCS;
+     }else{
+       circleShape.collisionGroup = BLUEDISCS;
+     }
+     let circleBody = new Body({mass: discMass, position: [x, z]});
+
+     //circleShape1.material = new p2.Material();
+
      circleBody.addShape( circleShape );
-     circleBody.damping = 0;
+     circleBody.damping = 0.2;
      world.addBody( circleBody );
      disc.userData.body = circleBody;
+     disc.userData.shape = circleShape;
      disc.visible = true;
+     //disc.status = 'inactive';
+     disc.status = 'open';
+     setDiscCollisionMasks(disc);
+     window.discs = discs
    });
+
 
    giveDiscsRandomMotion();
  }
  
 
  function addBounds(){
-   let restitution = 1;;
+   let restitution = 1;
    let wallDepth = .05;
    let hwd = wallDepth / 2;
-   let xCoord = courtWidth / 2;
-   let yCoord = courtLength /2;
+   let xCoord = courtWidth / 2 * 1.5;
+   let yCoord = courtLength /2 * 1.5;
    let wallParams = [
      //Bottom wall
      [0, -yCoord, 0],
@@ -492,7 +537,10 @@
        position: w.slice(0, 2),
        angle: w[2],
      });
-     plane.addShape( new Plane() );
+     let planeShape = new Plane();
+     planeShape.collisionGroup = BOUNDS
+     planeShape.collisionMask = REDDISCS | BLUEDISCS;
+     plane.addShape( planeShape );
      plane.damping = 0;
      world.addBody( plane );
    });
@@ -503,12 +551,12 @@
      let body = disc.userData.body;
      let v = {x: (Math.random() - 0.5) , y: (Math.random() - 0.5)  };
      //Matter.Body.setVelocity( body, v );
-     disc.userData.body.force = [v.x*20, v.y* 20];
+     disc.userData.body.force = [v.x*2, v.y* 2];
    });
  }
 
- function throwDisc(){
-   let disc = discs[0];
+ function throwRandomDisc(){
+   let disc = discs[Math.floor(Math.random() * discs.length)];
    let v = {x: (Math.random() - 0.5) , y: Math.random() > 0.5 ? 1 : -1};
    disc.userData.body.force = [v.x * 10, v.y * 40]
  }
@@ -521,14 +569,14 @@
    );
    scene.add(cue);
 
-   let cueConstraintLength = .25;
    let cueX = 0,
        cueY = - cueDepth / 2 - cueConstraintLength / 2;
    cue.matrixAutoUpdate = false;
    cue.matrix.setPosition(cueX, discHeight, cueY);
    cue.applyMatrix4( reticle.matrix );
 
-   let cueShape = new Box({width: cueWidth, height: cueDepth});
+   cueShape = new Box({width: cueWidth, height: cueDepth});
+
    let cueBody = new Body({
      mass: 10, position: [cueX, cueY],
      //fixedRotation: true
@@ -585,6 +633,182 @@
    });
  }
 
+ function setCueCollisions(){
+   if(currentPlayer == 'red'){
+     cueShape.collisionGroup = REDCUE;
+     cueShape.collisionMask = REDDISCS; 
+   }else if(currentPlayer == 'blue'){
+     cueShape.collisionGroup = BLUECUE;
+     cueShape.collisionMask = BLUEDISCS;
+   }else{
+     cueShape.collisionGroup = BLUECUE | REDCUE;
+     cueShape.collisionMask = BLUEDISCS | REDDISCS;
+   }
+ }
+
+ function setDiscCollisionMasks(disc){
+   if(disc.status == 'inactive'){
+     disc.userData.shape.collisionMask = 0;
+   }else if(disc.status == 'oncue'){
+     disc.userData.shape.collisionMask = disc.discColor == 'red'
+                                       ? REDDISCS | BLUEDISCS | REDCUE | BOUNDS
+                                       : REDDISCS | BLUEDISCS | BLUECUE | BOUNDS;
+   }else if(disc.status == 'inplay'){
+     disc.userData.shape.collisionMask = disc.discColor == 'red'
+                                       ? REDDISCS | BLUEDISCS | BOUNDS | SCORINGAREAS
+                                       : REDDISCS | BLUEDISCS |  BOUNDS | SCORINGAREAS;
+   }else if(disc.status == 'open'){
+     disc.userData.shape.collisionMask = -1;
+   }
+ }
+
+ function startGame(){
+   currentControl = 'throw';
+   currentPlayer = 'red';
+   currentTurnNumber = 0;
+   discs.forEach( disc => {
+     disc.status = 'inactive';
+     disc.visible = false;
+     //disc.userData.body.position[0] = THREE.MathUtils.lerp(- courtWidth / 2, courtWidth / 2, disc.userData.discNumber / discs.length);
+     disc.userData.body.position[0] = 0;
+     disc.userData.body.position[1] = courtLength / 2 * .8;
+     disc.userData.body.velocity[0] = 0;
+     disc.userData.body.velocity[1] = 0;
+     setDiscCollisionMasks( disc );
+     
+   });
+   startPlayerTurn();
+ }
+
+ function startPlayerTurn(){
+   console.log('turn: ' + currentTurnNumber)
+   if(currentTurnNumber % 2 == 0){
+     currentPlayer = 'red';
+     cue.material.color.setHex( 0xff0000 );
+   }else{
+     currentPlayer = 'blue';
+     cue.material.color.setHex( 0x0000ff );
+   }
+   setCueCollisions();
+
+   if(currentTurnNumber > 0){
+     discs[currentTurnNumber - 1].status = 'inplay';
+     setDiscCollisionMasks( discs[currentTurnNumber - 1] );
+   }
+   discs[currentTurnNumber].visible = 'true';
+   discs[currentTurnNumber].status = 'oncue';
+   setDiscCollisionMasks( discs[currentTurnNumber] );
+ }
+
+ function throwCurrentDisc(){
+   currentControl = 'disabled';
+   //discs[ currentTurnNumber ].userData.body.force = [ Math.random() - 0.5, - (Math.random() * 3.0+ 3.0)];
+   discs[ currentTurnNumber ].userData.body.force = [ 0, - (Math.random() * 3.0+ 10.0)];
+   setTimeout( moveOnToNextTurn, 6000 );
+ }
+
+ function moveOnToNextTurn(){
+   currentTurnNumber++;
+   if(currentTurnNumber == discs.length){
+     handleRoundOver();
+     return;
+   }else{
+     currentControl = 'throw'
+     startPlayerTurn();
+   }
+ }
+
+ function handleRoundOver(){
+   let { sensorOverlaps, scores } = getScores()
+
+   if(scores.red > scores.blue){
+     console.log( 'Red: ', scores.red - scores.blue)
+   }else if(scores.blue > scores.red){
+     console.log( 'Blue: ', - scores.red + scores.blue)
+   }else{
+     console.log( 'Tie: ', 0 );
+   }
+   setTimeout( moveOnToNextRound, 6000 );
+ }
+
+ function moveOnToNextRound(){
+   
+ }
+
+
+ /*
+    Scoring related functions
+  */
+ function addScoreSensors(){
+   let { imageCourtWidth, imageCourtHeight, left} = scoringAreas;
+   left.forEach( ({ value, vertices }) => {
+     vertices = vertices.map( ([x,y]) => {
+       //Flip the x and y, and scale to world court dimensions
+       return [
+         -1 * ( .5 - y / imageCourtHeight ) * courtWidth,
+         ( .5 - x / imageCourtWidth ) * courtLength
+       ];
+     });
+
+
+     let convexShape = new Convex({ vertices, sensor: true });
+     convexShape.collisionGroup = SCORINGAREAS;
+     convexShape.collisionMask = -1;
+     let convexBody = new Body({ mass: 0, position: [0,0] });
+     convexBody.scoreValue = value;
+     convexBody.addShape( convexShape );
+     world.addBody( convexBody );
+     scoreAreas.push( convexBody )
+
+     //Add mirror sensors
+     vertices = vertices.map( ([x,y]) => {
+       return [
+         x,
+         -1 * y
+       ];
+     });
+     vertices.reverse();
+
+     convexShape = new Convex({ vertices, sensor: true });
+     convexShape.collisionGroup = SCORINGAREAS;
+     convexShape.collisionMask = -1;
+     convexBody = new Body({ mass: 0, position: [0,0] });
+     convexBody.scoreValue = value;
+     convexBody.addShape( convexShape );
+     world.addBody( convexBody );
+     scoreAreas.push( convexBody )
+
+   });
+
+   window.scoreAreas = scoreAreas;
+   window.world = world
+ }
+
+ function getScores(){
+   let scores = {red: 0, blue: 0}
+   let sensorOverlaps = [];
+   let redScore = 0,
+       blueScore = 0;
+   Object.values(world.overlapKeeper.overlappingShapesCurrentState.data).forEach( o => {
+     if(o.shapeA instanceof Convex){
+       if(o.bodyA.aabb.containsPoint(o.bodyB.position)){
+         scores[o.shapeB.threeObj.discColor] += o.bodyA.scoreValue
+         sensorOverlaps.push({overlap: o, score: o.bodyA.scoreValue, color: o.shapeB.threeObj.discColor})
+       }
+     }else if(o.shapeB instanceof Convex){
+       if(o.bodyB.aabb.containsPoint(o.bodyA.position)){
+         scores[o.shapeA.threeObj.discColor] += o.bodyB.scoreValue
+         sensorOverlaps.push({overlap: o, score: o.bodyB.scoreValue, color: o.shapeA.threeObj.discColor})
+       }
+     }
+   });
+   scores.blue = Math.max(scores.blue, 0)
+   scores.red = Math.max(scores.red, 0)
+   return { sensorOverlaps, scores }
+ }
+ 
+ window.getScores = getScores
+ window.handleRoundOver = handleRoundOver;
  window.sdd = setDiscsDamping
 
 </script>
