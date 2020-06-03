@@ -8,14 +8,14 @@
  let overlayComponent, rendererComponent, overlayContainer;
 
  let arReady = false;
- let ammoReady = false;
+ let appReady = false;
  let sessionActive = window.location.search == '?overlay' ? true : false;
  //let sessionActive = true;
 
  let controls = ['court', 'throw']
  let currentControl = 'court';
 
- $:showOverlay = arReady && ammoReady;
+ $:showOverlay = arReady && appReady;
  let showDebug = true;
 
  if('xr' in navigator){
@@ -25,7 +25,7 @@
  }
 
  function initApp(){
-   ammoReady = true;
+   appReady = true;
  }
 
  function handleStartClick(){
@@ -77,7 +77,7 @@
     />
   </div>
   <ARRenderer bind:this={rendererComponent} {overlayContainer} {currentControl} {overlayComponent}
-              {showDebug} on:ammoLoaded={initApp}
+              {showDebug} on:appLoaded={initApp}
               on:changeControls={handleChangeControls}
   />
 
