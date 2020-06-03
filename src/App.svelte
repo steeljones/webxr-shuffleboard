@@ -15,6 +15,11 @@
  let controls = ['court', 'throw']
  let currentControl = 'court';
 
+ let gameScore = { red: 0, blue: 0 };
+ window.gameScore = gameScore
+
+ let messageText = '';
+
  $:showOverlay = arReady && appReady;
  let showDebug = true;
 
@@ -50,8 +55,22 @@
    }
  }
 
+ function handleUpdateScore({detail}){
+   let {color, value} = detail
+ 
+   gameScore[color] += value;
+   //gameScore = gameScore;
+   console.log(gameScore)
+ }
+
+ function handleGameOver({detail}){
+   let { winner } = detail;
+   messageText = 'Winner: ' + winner;
+ }
+ 
  //Overlay doesn't work on webxr emulator, so expose function on window for development
  window.handleChangeControls = handleChangeControls;
+ window.hus = handleUpdateScore
   
 </script>
 
@@ -69,16 +88,18 @@
 
 <main>
   <div bind:this={overlayContainer} class="overlay-container">
-    <Overlay  {sessionActive} {currentControl} {rendererComponent} {showDebug} 
+    <Overlay  {sessionActive} {currentControl} {rendererComponent} {showDebug} {gameScore} {messageText}
               on:startClick={handleStartClick}
               on:endClick={handleEndClick}              
               on:changeControls={handleChangeControls}
               bind:this={overlayComponent}
     />
   </div>
-  <ARRenderer bind:this={rendererComponent} {overlayContainer} {currentControl} {overlayComponent}
+  <ARRenderer bind:this={rendererComponent} {overlayContainer} {currentControl} {overlayComponent} {gameScore}
               {showDebug} on:appLoaded={initApp}
               on:changeControls={handleChangeControls}
+              on:updateScore={handleUpdateScore}
+              on:gameOver={handleGameOver}
   />
 
 </main>

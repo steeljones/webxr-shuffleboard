@@ -7,9 +7,10 @@
  export let overlayContainer;
  export let currentControl;
  export let showDebug;
+ export let gameScore;
   
  import * as THREE from 'three';
- import { Body, World, Circle, Plane, Box, Convex, DistanceConstraint, PrismaticConstraint, vec2 } from "p2";
+ import { Body, World, Circle, Plane, Box, Convex, DistanceConstraint, PrismaticConstraint, ContactMaterial, Material, vec2 } from "p2";
  import Stats from 'stats-js';
  import { createEventDispatcher, tick } from 'svelte';
 
@@ -73,6 +74,7 @@
  let cueDepth = discRadius;
  let cueConstraintLength = .25;
  let devModeCueOffset = -courtLength * .425;
+ let discRestitution = 0.5;
  //let cueConstraintLength =  .25;
  
  //Collison Masks
@@ -93,7 +95,7 @@
  let inPlayLine; //
  //Number of points to win
  let scoreThreshold = 21;
- let gameScores = { red: 0, blue: 0 };
+
  //Variable to control which side of court is in play - 
  let oppositeSideInPlay = false;
  
@@ -480,7 +482,7 @@
  function initDiscs(){
    let discGeometry = new THREE.CylinderBufferGeometry( discRadius, discRadius, discHeight, 32, 1 );
 
-   let numDiscs = 2;
+   let numDiscs = 8;
    for(let i = 0; i < numDiscs; i++) {
      let material = new THREE.MeshBasicMaterial( );
      let disc = new THREE.Mesh( discGeometry, material );
@@ -505,6 +507,8 @@
    let pos = new THREE.Vector3();
    court.getWorldPosition( pos );
 
+   let p2Material = new Material();
+   
    for( let idx = 0; idx < discs.length; idx++ ){
      let disc = discs[idx];
      let x = 0;
@@ -522,6 +526,7 @@
      let circleBody = new Body({mass: discMass, position: [x, z]});
 
      //circleShape1.material = new p2.Material();
+     circleShape.material = p2Material;
 
      circleBody.addShape( circleShape );
      circleBody.damping = 0.3;
@@ -538,6 +543,10 @@
      setDiscCollisionMasks(disc);
      window.discs = discs
    }
+
+   world.addContactMaterial(new ContactMaterial(discs[0].userData.shape.material, discs[1].userData.shape.material, {
+     restitution : discRestitution
+   }));
 
    giveDiscsRandomMotion();
  }
@@ -694,8 +703,6 @@
  }
 
  function startGame(){
-   gameScores.red = 0;
-   gameScores.blue = 0;
    currentControl = 'throw';
    resetDiscs(false);
    startPlayerTurn();
@@ -764,11 +771,13 @@
    if(roundScores.red > roundScores.blue){
      roundWinner = 'red'
      console.log( 'Red: ', roundScores.red - roundScores.blue)
-     gameScores.red += roundScores.red - roundScores.blue
+     dispatch('updateScore', {color: 'red', value: roundScores.red - roundScores.blue})
+     //gameScore.red += roundScores.red - roundScores.blue
    }else if(roundScores.blue > roundScores.red){
      roundWinner = 'blue'
      console.log( 'Blue: ', - roundScores.red + roundScores.blue)
-     gameScores.blue += roundScores.blue - roundScores.red
+     //gameScore.blue += roundScores.blue - roundScores.red
+     dispatch('updateScore', {color: 'blue', value: roundScores.blue - roundScores.red})
    }else{
      console.log( 'Tie: ', 0 );
    }
@@ -913,22 +922,18 @@
  }
 
  function gameIsOver(){
-   return gameScores.red > scoreThreshold || gameScores.blue > scoreThreshold
+   return gameScore.red > scoreThreshold || gameScore.blue > scoreThreshold
  }
 
  function handleGameOver(){
    //TODO: Show final score, then set timeout to reset
-   if( gameScores.red > scoreThreshold ){
-     handleWin('red')
-     
-   }else if( gameScores.blue > scoreThreshold ){
-     handleWin('blue')
+   if( gameScore.red > scoreThreshold ){
+     dispatch('gameOver', {winner: 'red'})
+     console.log('GAME WON: red');
+   }else if( gameScore.blue > scoreThreshold ){
+     dispatch('gameOver', {winner: 'blue'})
+     console.log('GAME WON: blue');
    }   
- }
-
- function handleWin(color){
-   console.log('GAME WON: ', color);
-   
  }
 
  
