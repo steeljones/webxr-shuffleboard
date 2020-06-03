@@ -94,7 +94,7 @@
  //The line on the court that a disc must cross to be considered in play
  let inPlayLine; //
  //Number of points to win
- let scoreThreshold = 21;
+ let scoreThreshold = 6;
 
  //Variable to control which side of court is in play - 
  let oppositeSideInPlay = false;
@@ -199,7 +199,7 @@
 
  function handleSelect(event) {
    if(lockUI) return
-
+   
    switch ( currentControl ){
      case 'court':
        if ( reticle.visible) {
@@ -482,7 +482,7 @@
  function initDiscs(){
    let discGeometry = new THREE.CylinderBufferGeometry( discRadius, discRadius, discHeight, 32, 1 );
 
-   let numDiscs = 8;
+   let numDiscs = 2;
    for(let i = 0; i < numDiscs; i++) {
      let material = new THREE.MeshBasicMaterial( );
      let disc = new THREE.Mesh( discGeometry, material );
@@ -540,15 +540,15 @@
      disc.visible = true;
      //disc.status = 'inactive';
      disc.status = 'open';
-     setDiscCollisionMasks(disc);
-     window.discs = discs
-   }
+     setDiscCollisionMask(disc);
+    }
 
    world.addContactMaterial(new ContactMaterial(discs[0].userData.shape.material, discs[1].userData.shape.material, {
      restitution : discRestitution
    }));
 
    giveDiscsRandomMotion();
+   window.discs = discs
  }
  
 
@@ -686,7 +686,7 @@
    }
  }
 
- function setDiscCollisionMasks(disc){
+ function setDiscCollisionMask(disc){
    if(disc.status == 'inactive'){
      disc.userData.shape.collisionMask = 0;
    }else if(disc.status == 'oncue'){
@@ -703,7 +703,7 @@
  }
 
  function startGame(){
-   currentControl = 'throw';
+   dispatch('startGame', {});
    resetDiscs(false);
    startPlayerTurn();
  }
@@ -725,7 +725,7 @@
      disc.userData.body.velocity[0] = 0;
      disc.userData.body.velocity[1] = 0;
      disc.userData.body.sleep();
-     setDiscCollisionMasks( disc );
+     setDiscCollisionMask( disc );
    }
  }
 
@@ -741,15 +741,14 @@
 
    if(currentTurnNumber > 0){
      discs[currentTurnNumber - 1].status = 'inplay';
-     setDiscCollisionMasks( discs[currentTurnNumber - 1] );
+     setDiscCollisionMask( discs[currentTurnNumber - 1] );
    }
    discs[currentTurnNumber].visible = 'true';
    discs[currentTurnNumber].status = 'oncue';
-   setDiscCollisionMasks( discs[currentTurnNumber] );
+   setDiscCollisionMask( discs[currentTurnNumber] );
  }
 
  function throwCurrentDisc(){
-   //currentControl = 'throw-active';
    if(oppositeSideInPlay){
      discs[ currentTurnNumber ].userData.body.force = [ (Math.random() - 0.5) * 2, (Math.random() * 3.0+ 14.0)];
    }else{
@@ -759,14 +758,14 @@
 
  function moveOnToNextTurn(){
    currentTurnNumber++;
-   currentControl = 'throw'
+   //currentControl = 'throw'
+   dispatch('changeControls', { controlType: 'throw' });
    startPlayerTurn();
  }
 
  function handleRoundOver(){
    let { sensorOverlaps, roundScores } = getRoundScores()
 
-   //TODO: show game status / score update in overlay,
    let roundWinner;
    if(roundScores.red > roundScores.blue){
      roundWinner = 'red'
@@ -798,7 +797,8 @@
 
  function moveOnToNextRound(previousRoundWinner){
    //TODO - show prompt / arrow to switch sides
-   currentControl = 'throw';
+   //currentControl = 'throw';
+   dispatch('changeControls', { controlType: 'throw' });
    //set next player to the winner of previous round
    if( previousRoundWinner != discs[0].userData.discColor ){
      discs.push( discs.shift() );
@@ -899,7 +899,7 @@
  function handleThrownDisc(){
    console.log( 'THROWN');
    discs[currentTurnNumber].status = 'inplay'
-   setDiscCollisionMasks( discs[ currentTurnNumber ] )
+   setDiscCollisionMask( discs[ currentTurnNumber ] )
  }
 
  function testForThrowOver(){
@@ -926,14 +926,19 @@
  }
 
  function handleGameOver(){
-   //TODO: Show final score, then set timeout to reset
    if( gameScore.red > scoreThreshold ){
      dispatch('gameOver', {winner: 'red'})
-     console.log('GAME WON: red');
+ 
    }else if( gameScore.blue > scoreThreshold ){
      dispatch('gameOver', {winner: 'blue'})
-     console.log('GAME WON: blue');
-   }   
+   }
+   for( let disc of discs ){
+     disc.status = 'open';
+     setDiscCollisionMask( disc );
+   }
+   currentTurnNumber = 0;
+   oppositeSideInPlay = false;
+   
  }
 
  

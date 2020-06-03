@@ -21,6 +21,11 @@
  let messageText = '';
 
  $:showOverlay = arReady && appReady;
+
+ $: {
+   //console.log('Current control changed: ', currentControl)
+   window.currentControl = currentControl
+ }
  let showDebug = true;
 
  if('xr' in navigator){
@@ -53,6 +58,7 @@
      let currentIdx = controls.indexOf(currentControl);
      currentControl = controls[++currentIdx % controls.length];
    }
+   console.log('control: ', controlType)
  }
 
  function handleUpdateScore({detail}){
@@ -66,11 +72,22 @@
  function handleGameOver({detail}){
    let { winner } = detail;
    messageText = 'Winner: ' + winner;
+   console.log('GAME WON: ', winner);
+   currentControl = 'inactive';
+   //Reset score
+   //gameScore
+ }
+
+ function handleStartGame(){
+   gameScore.red = 0;
+   gameScore.blue = 0;
+   currentControl = 'throw';
  }
  
  //Overlay doesn't work on webxr emulator, so expose function on window for development
  window.handleChangeControls = handleChangeControls;
  window.hus = handleUpdateScore
+ window.hgo = handleGameOver
   
 </script>
 
@@ -100,6 +117,7 @@
               on:changeControls={handleChangeControls}
               on:updateScore={handleUpdateScore}
               on:gameOver={handleGameOver}
+              on:startGame={handleStartGame}
   />
 
 </main>
