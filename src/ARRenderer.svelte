@@ -67,7 +67,7 @@
  let discRadius = .1 * gameScale;
  let discHeight = .01;
  let discMass = .425 * gameScale;//kg - not sure if it should be changed to grams
- let cueWidth = discRadius * 4;
+ let cueWidth = discRadius * 6;
  let cueHeight = discRadius;
  let cueDepth = discRadius;
  let cueConstraintLength = .25 / 4;
@@ -96,7 +96,7 @@
  let scoreThreshold = 6;
 
  //Variable to control which side of court is in play - 
- let oppositeSideInPlay = true;
+ let oppositeSideInPlay = false;
  
 
  let lockUI = false;
@@ -215,8 +215,11 @@
      case 'throw':
        if(DEV_MODE){
          throwCurrentDisc();
-       }else{
+       }else if( discs[ currentTurnNumber ].status != 'inplay'){
          resetCurrentDisc();
+       }else{
+         discs[ currentTurnNumber ].userData.body.force[0] = -.2 * discs[ currentTurnNumber ].userData.body.velocity[0];
+         discs[ currentTurnNumber ].userData.body.force[1] = -.2 * discs[ currentTurnNumber ].userData.body.velocity[1];
        }
        break;
    }
