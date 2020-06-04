@@ -4,6 +4,7 @@
  export let rendererComponent;
  export let showDebug;
  export let messageText;
+ export let instructionsText;
 
  export let gameScore;
 
@@ -87,6 +88,9 @@
   <div class="{messageText ? 'message' : 'hidden message'}">
     { messageText }
   </div>
+  <div class="{instructionsText ? 'instructions' : 'hidden instructions'}">
+    { instructionsText }
+  </div>
 
   {/if}
   {#if showDebug}
@@ -158,6 +162,16 @@
      top: 48vh;
      text-align: center;
      text-transform: uppercase;
+ }
+ .instructions {
+     pointer-events: none;
+     color: red;
+     font-size: 30px;
+     font-family: monospace;
+     width: 100vw;
+     position: fixed;
+     top: 60vh;
+     text-align: center;
  }
  .hidden{
      opacity: 0;

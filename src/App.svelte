@@ -19,6 +19,7 @@
  window.gameScore = gameScore
 
  let messageText = '';
+ let instructionsText = '';
 
  $:showOverlay = arReady && appReady;
 
@@ -72,6 +73,7 @@
  function handleGameOver({detail}){
    let { winner } = detail;
    messageText = 'Winner: ' + winner;
+   instructionsText = 'Tap to play again';
    console.log('GAME WON: ', winner);
    currentControl = 'inactive';
    //Reset score
@@ -82,6 +84,8 @@
    gameScore.red = 0;
    gameScore.blue = 0;
    currentControl = 'throw';
+   messageText = '';
+   instructionsText = '';
  }
  
  //Overlay doesn't work on webxr emulator, so expose function on window for development
@@ -106,6 +110,7 @@
 <main>
   <div bind:this={overlayContainer} class="overlay-container">
     <Overlay  {sessionActive} {currentControl} {rendererComponent} {showDebug} {gameScore} {messageText}
+              {instructionsText}
               on:startClick={handleStartClick}
               on:endClick={handleEndClick}              
               on:changeControls={handleChangeControls}
