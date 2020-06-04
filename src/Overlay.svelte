@@ -20,7 +20,6 @@
  let debugItems = {};
  let showMessage = false;
 
-
  let touchStartPoint = {x: 0, y:0};
 
  let matterDebugCanvas;
@@ -85,7 +84,7 @@
       Blue: {gameScore.blue}
     </div>
   </div>
-  <div class="{showMessage ? 'message' : 'hidden message'}">
+  <div class="{messageText ? 'message' : 'hidden message'}">
     { messageText }
   </div>
 
@@ -122,7 +121,7 @@
      outline: none;
      z-index: 999;
  }
- 
+
  .ar-button:hover {
      opacity: 1.0;
  }
@@ -152,12 +151,13 @@
  .message {
      pointer-events: none;
      color: red;
-     font-size: 24px;
+     font-size: 36px;
      font-family: monospace;
-     width: 100px;
+     width: 100vw;
      position: fixed;
      top: 48vh;
-     left: calc(50vw - 50px);
+     text-align: center;
+     text-transform: uppercase;
  }
  .hidden{
      opacity: 0;
@@ -176,6 +176,7 @@
      margin-left: 30vw;
      padding: 8px;
  }
+ 
 </style>  
 
 

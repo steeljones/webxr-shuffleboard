@@ -60,7 +60,7 @@
 
  //p2/three parameter variables
  let anchorHeight = .2;
- let gameScale = 1 / 3;
+ let gameScale = 1 / 4;
  let courtWidth = 1.5 * gameScale;
  let courtLength = 9.1 * gameScale;
  let courtHeight = .02;
@@ -70,9 +70,10 @@
  let cueWidth = discRadius * 4;
  let cueHeight = discRadius;
  let cueDepth = discRadius;
- let cueConstraintLength = .25;
+ let cueConstraintLength = .25 / 4;
  let devModeCueOffset = -courtLength * .425;
  let discRestitution = 0.5;
+ let discDamping = 0.4
  //let cueConstraintLength =  .25;
  
  //Collison Masks
@@ -95,7 +96,7 @@
  let scoreThreshold = 6;
 
  //Variable to control which side of court is in play - 
- let oppositeSideInPlay = false;
+ let oppositeSideInPlay = true;
  
 
  let lockUI = false;
@@ -525,7 +526,7 @@
      circleShape.material = p2Material;
 
      circleBody.addShape( circleShape );
-     circleBody.damping = 0.3;
+     circleBody.damping = discDamping;;
      circleBody.sleepSpeedLimit = .1;
      circleBody.sleepTimeLimit =  1;
      //circleBody.sleepTimeLimit =  .5;
@@ -615,7 +616,7 @@
 
    let cueBody = new Body({
      mass: 10, position: [cueX, cueY],
-     allowSleep: false
+     allowSleep: false,
      //fixedRotation: true
    });
    cueBody.addShape( cueShape );
@@ -754,14 +755,20 @@
    }
    discs[currentTurnNumber].visible = 'true';
    discs[currentTurnNumber].status = 'oncue';
+   discs[currentTurnNumber].userData.body.wakeUp();
+   discs[currentTurnNumber].userData.body.allowSleep = false;
    setDiscCollisionMask( discs[currentTurnNumber] );
  }
 
  function throwCurrentDisc(){
+   if(Math.abs(discs[ currentTurnNumber ].userData.body.velocity[1]) > .05){
+     discs[ currentTurnNumber ].userData.body.force[1] += .1 * (oppositeSideInPlay ? 1 : -1)
+     return
+   }
    if(oppositeSideInPlay){
-     discs[ currentTurnNumber ].userData.body.force = [ (Math.random() - 0.5) * 2, (Math.random() * 3.0+ 14.0)];
+     discs[ currentTurnNumber ].userData.body.force = [ (Math.random() - 0.5) * .6, (Math.random() * 2.0+ 4.5)];
    }else{
-     discs[ currentTurnNumber ].userData.body.force = [ (Math.random() - 0.5) * 2, - (Math.random() * 3.0+ 14.0)];
+     discs[ currentTurnNumber ].userData.body.force = [ (Math.random() - 0.5) * .6, - (Math.random() * 2.0+ 4.5)];
    }
  }
 
@@ -908,6 +915,7 @@
  function handleThrownDisc(){
    console.log( 'THROWN');
    discs[currentTurnNumber].status = 'inplay'
+   discs[currentTurnNumber].userData.body.allowSleep = true;
    setDiscCollisionMask( discs[ currentTurnNumber ] )
  }
 
