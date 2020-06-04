@@ -43,9 +43,7 @@
      cue,
      showCue = false,
      reticleNullBody,
-     reticleNullBody2,     
-     helperMat = new THREE.Matrix4();
-     //retPos = new THREE.Vec
+     reticleNullBody2;
 
  //Webxr variables
  let hitTestSource = null;
@@ -62,11 +60,11 @@
 
  //p2/three parameter variables
  let anchorHeight = .2;
- let gameScale = 1 / 2;
+ let gameScale = 1 / 3;
  let courtWidth = 1.5 * gameScale;
  let courtLength = 9.1 * gameScale;
  let courtHeight = .02;
- let discRadius = .05;
+ let discRadius = .1 * gameScale;
  let discHeight = .01;
  let discMass = .425 * gameScale;//kg - not sure if it should be changed to grams
  let cueWidth = discRadius * 4;
@@ -216,6 +214,8 @@
      case 'throw':
        if(DEV_MODE){
          throwCurrentDisc();
+       }else{
+         resetCurrentDisc();
        }
        break;
    }
@@ -370,15 +370,11 @@
      cursorQuat.setFromAxisAngle( new THREE.Vector3( 0, 1, 0 ), cueAngle );
      cue.matrix.compose(cursorPos, cursorQuat, cursorScale);
      cue.applyMatrix4( court.matrixWorld );
-     
-     //Set helperMat to the inverse of the court's transformation matrix
-     helperMat.getInverse( court.matrixWorld );
-     
-     cursorMat.copy( reticle.matrixWorld );
-     cursorMat.multiply( helperMat );
+
+     cursorMat.getInverse( court.matrixWorld );
+     cursorMat.multiply( reticle.matrixWorld );     
      cursorMat.decompose( cursorPos, cursorQuat, cursorScale );
      cursorEuler.setFromQuaternion( cursorQuat );
-
 
      reticleNullBody.angle = cursorEuler.y;
      reticleNullBody2.angle = cursorEuler.y;
@@ -387,15 +383,15 @@
      let offset = [Math.cos(cursorEuler.y), Math.sin(cursorEuler.y)];
      if(DEV_MODE){
        if(oppositeSideInPlay){
-         vec2.set( reticleNullBody.position, cursorPos.x - cueWidth / 2 - offset[0], -1 * (cursorPos.z - offset[0] - devModeCueOffset));
-         vec2.set( reticleNullBody2.position, cursorPos.x + cueWidth / 2 + offset[0], -1 * (cursorPos.z + offset[0] - devModeCueOffset));
+         vec2.set( reticleNullBody.position, cursorPos.x - cueWidth / 2 - offset[0], -1 * (cursorPos.z - offset[1] - devModeCueOffset));
+         vec2.set( reticleNullBody2.position, cursorPos.x + cueWidth / 2 + offset[0], -1 * (cursorPos.z + offset[1] - devModeCueOffset));
        }else{
-         vec2.set( reticleNullBody.position, cursorPos.x - cueWidth / 2 - offset[0], cursorPos.z - offset[0] - devModeCueOffset);
-         vec2.set( reticleNullBody2.position, cursorPos.x + cueWidth / 2 + offset[0], cursorPos.z + offset[0] - devModeCueOffset);
+         vec2.set( reticleNullBody.position, cursorPos.x - cueWidth / 2 - offset[0], cursorPos.z - offset[1] - devModeCueOffset);
+         vec2.set( reticleNullBody2.position, cursorPos.x + cueWidth / 2 + offset[0], cursorPos.z + offset[1] - devModeCueOffset);
        }
      }else{
-       vec2.set( reticleNullBody.position, cursorPos.x - cueWidth / 2 - offset[0], cursorPos.z - offset[0]);
-       vec2.set( reticleNullBody2.position, cursorPos.x + cueWidth / 2 + offset[0], cursorPos.z + offset[0]);
+       vec2.set( reticleNullBody.position, cursorPos.x - cueWidth / 2 * offset[0], cursorPos.z - cueWidth / 2 * offset[1]);
+       vec2.set( reticleNullBody2.position, cursorPos.x + cueWidth / 2 * offset[0], cursorPos.z + cueWidth / 2 * offset[1]);
      }
 
      //Test if currentDisc has been thrown
@@ -619,6 +615,7 @@
 
    let cueBody = new Body({
      mass: 10, position: [cueX, cueY],
+     allowSleep: false
      //fixedRotation: true
    });
    cueBody.addShape( cueShape );
@@ -727,6 +724,18 @@
      disc.userData.body.sleep();
      setDiscCollisionMask( disc );
    }
+ }
+
+ function resetCurrentDisc(){
+   let disc = discs[ currentTurnNumber ];
+   disc.userData.body.position[0] = 0;
+   if(oppositeSideInPlay){
+     disc.userData.body.position[1] = courtLength / 2 * .8 * -1;
+   }else{
+     disc.userData.body.position[1] = courtLength / 2 * .8;
+   }
+   disc.userData.body.velocity[0] = 0;
+   disc.userData.body.velocity[1] = 0;
  }
 
  function startPlayerTurn(){
