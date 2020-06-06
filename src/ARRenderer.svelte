@@ -15,7 +15,6 @@
  import { createEventDispatcher, tick } from 'svelte';
 
  import scoringAreas from './scoringAreas';
- window.scoringAreas = scoringAreas;
  const dispatch = createEventDispatcher();
 
  
@@ -38,7 +37,8 @@
      anchor,
      court,
      discs = [],
-     cueShape,
+     cueShape1,
+     cueShape2,
      cueBody,
      cue,
      showCue = false,
@@ -60,7 +60,7 @@
 
  //p2/three parameter variables
  let anchorHeight = .2;
- let gameScale = 1 / 4;
+ let gameScale = DEV_MODE ? 1 / 2 : 1 / 3;
  let courtWidth = 1.5 * gameScale;
  let courtLength = 9.1 * gameScale;
  let courtHeight = .02;
@@ -69,13 +69,11 @@
  let discMass = .425 * gameScale;//kg - not sure if it should be changed to grams
  let cueWidth = discRadius * 6;
  let cueHeight = discRadius;
- let cueDepth = discRadius;
- let cueConstraintLength = .25 / 4;
+ let cueDepth = discRadius / 2;
  let devModeCueOffset = -courtLength * .425;
  let discRestitution = 0.5;
  let discDamping = 0.4
- //let cueConstraintLength =  .25;
- 
+  
  //Collison Masks
  let SCORINGAREAS = Math.pow(2, 0);
  let BOUNDS = Math.pow(2, 1);
@@ -119,6 +117,10 @@
    
    if(showDebug){
      setTimeout  ( () => initStats, 500 );
+   }
+
+   if(DEV_MODE){
+     initDevKeyListeners();
    }
  }
 
@@ -294,8 +296,12 @@
 
 	 var hit = hitTestResults[ 0 ];
 
-	 reticle.visible = true;
-	 reticle.matrix.fromArray( hit.getPose( referenceSpace ).transform.matrix );
+         reticle.visible = true;
+         if(DEV_MODE && currentControl != 'court'){
+           
+         }else{
+	   reticle.matrix.fromArray( hit.getPose( referenceSpace ).transform.matrix );
+         }
 
          if( currentControl == 'court'){
            //court.matrix.fromArray( hit.getPose( referenceSpace ).transform.matrix );
@@ -315,7 +321,7 @@
 
      }
      
-     if( showDebug ){
+     if( !DEV_MODE && showDebug ){
        let pose = frame.getViewerPose(referenceSpace);
 
        if( pose ){
@@ -364,38 +370,43 @@
    }
 
    if(showCue){
-     let cueAngle = reticleNullBody.interpolatedAngle;
+
+     //let cueAngle = cursorEuler.y;
+     let cueAngle = cue.userData.body.angle;
+     
      let cuePos = cue.userData.body.interpolatedPosition;
 
      let quaternion = new THREE.Quaternion();
 
      cursorPos.set( cuePos[0], discHeight, cuePos[1] );
      cursorScale.set(1, 1, 1);
-     cursorQuat.setFromAxisAngle( new THREE.Vector3( 0, 1, 0 ), cueAngle );
+     cursorQuat.setFromAxisAngle( new THREE.Vector3( 0, -1, 0 ), cueAngle );
      cue.matrix.compose(cursorPos, cursorQuat, cursorScale);
      cue.applyMatrix4( court.matrixWorld );
+
 
      cursorMat.getInverse( court.matrixWorld );
      cursorMat.multiply( reticle.matrixWorld );     
      cursorMat.decompose( cursorPos, cursorQuat, cursorScale );
      cursorEuler.setFromQuaternion( cursorQuat );
 
-     reticleNullBody.angle = cursorEuler.y;
-     reticleNullBody2.angle = cursorEuler.y;
-     cue.userData.body.angle = cursorEuler.y;
+     //cue.userData.body.angle = cursorEuler.y;
 
      let offset = [Math.cos(cursorEuler.y), Math.sin(cursorEuler.y)];
+     let delta = [0,0];
      if(DEV_MODE){
        if(oppositeSideInPlay){
-         vec2.set( reticleNullBody.position, cursorPos.x - cueWidth / 2 - offset[0], -1 * (cursorPos.z - offset[1] - devModeCueOffset));
-         vec2.set( reticleNullBody2.position, cursorPos.x + cueWidth / 2 + offset[0], -1 * (cursorPos.z + offset[1] - devModeCueOffset));
+         //vec2.set( reticleNullBody.position, cursorPos.x - cueWidth / 2 - offset[0], -1 * (cursorPos.z - offset[1] - devModeCueOffset));
+         //vec2.set( reticleNullBody2.position, cursorPos.x + cueWidth / 2 + offset[0], -1 * (cursorPos.z + offset[1] - devModeCueOffset));
+         vec2.sub(delta, [cursorPos.x, cursorPos.z], cue.userData.body.position);
+         vec2.set( cue.userData.body.velocity, delta[0]*10, delta[1]*10);
        }else{
-         vec2.set( reticleNullBody.position, cursorPos.x - cueWidth / 2 - offset[0], cursorPos.z - offset[1] - devModeCueOffset);
-         vec2.set( reticleNullBody2.position, cursorPos.x + cueWidth / 2 + offset[0], cursorPos.z + offset[1] - devModeCueOffset);
+         vec2.sub(delta, [cursorPos.x, cursorPos.z], cue.userData.body.position);
+         vec2.set( cue.userData.body.velocity, delta[0]*10, delta[1]*10);
        }
      }else{
-       vec2.set( reticleNullBody.position, cursorPos.x - cueWidth / 2 * offset[0], cursorPos.z - cueWidth / 2 * offset[1]);
-       vec2.set( reticleNullBody2.position, cursorPos.x + cueWidth / 2 * offset[0], cursorPos.z + cueWidth / 2 * offset[1]);
+       vec2.sub(delta, [cursorPos.x, cursorPos.z], cue.userData.body.position);
+       vec2.set( cue.userData.body.velocity, delta[0]*5, delta[1]*5);
      }
 
      //Test if currentDisc has been thrown
@@ -482,7 +493,8 @@
  function initDiscs(){
    let discGeometry = new THREE.CylinderBufferGeometry( discRadius, discRadius, discHeight, 32, 1 );
 
-   let numDiscs = 2;
+   let numDiscs = 8;
+   
    for(let i = 0; i < numDiscs; i++) {
      let material = new THREE.MeshBasicMaterial( );
      let disc = new THREE.Mesh( discGeometry, material );
@@ -523,7 +535,7 @@
      }else{
        circleShape.collisionGroup = BLUEDISCS;
      }
-     let circleBody = new Body({mass: discMass, position: [x, z]});
+     let circleBody = new Body({mass: discMass, position: [x, z], allowSleep: false});
 
      //circleShape1.material = new p2.Material();
      circleShape.material = p2Material;
@@ -543,9 +555,11 @@
      setDiscCollisionMask(disc);
     }
 
-   world.addContactMaterial(new ContactMaterial(discs[0].userData.shape.material, discs[1].userData.shape.material, {
-     restitution : discRestitution
-   }));
+   if(discs.length > 1){
+     world.addContactMaterial(new ContactMaterial(discs[0].userData.shape.material, discs[1].userData.shape.material, {
+       restitution : discRestitution
+     }));
+   }
 
    giveDiscsRandomMotion();
    window.discs = discs
@@ -598,70 +612,52 @@
  }
 
  function initCue(){
+   /*
+   world.solver.iterations = 20;
+   world.solver.tolerance = 0.01;
+   world.islandSplit = true;
+*/
+   
    let mat = new THREE.MeshBasicMaterial( {color: 0xff00ff} );
-   cue = new THREE.Mesh(
-     new THREE.BoxBufferGeometry(cueWidth, cueHeight, cueDepth),
+   cue = new THREE.Group();
+   let armWidth = cueWidth / 2;
+   let cueArmOffset = armWidth/2 - cueDepth/2;
+   let cue1 = new THREE.Mesh(
+     new THREE.BoxBufferGeometry(armWidth, cueHeight, cueDepth).translate(-cueArmOffset, 0, 0),
      mat
    );
+   let cue2 = new THREE.Mesh(
+     new THREE.BoxBufferGeometry(cueDepth, cueHeight, armWidth).translate(0, 0, cueArmOffset),
+     mat
+   );
+   cue.add( cue1 );
+   cue.add( cue2 );
+   cue.material = mat;
    scene.add(cue);
-
    let cueX = 0,
-       cueY = - cueDepth / 2 - cueConstraintLength / 2;
-   if(DEV_MODE){
-     //Move cue out of the way in dev mode
-     cueY -= devModeCueOffset * 1.5;
-   }
+       cueY = 0;
    cue.matrixAutoUpdate = false;
    cue.matrix.setPosition(cueX, discHeight, cueY);
    cue.applyMatrix4( reticle.matrix );
 
-   cueShape = new Box({width: cueWidth, height: cueDepth});
+   cueShape1 = new Box({width: armWidth, height: cueDepth});
+   cueShape2 = new Box({height: armWidth, width: cueDepth});
 
    let cueBody = new Body({
-     mass: 10, position: [cueX, cueY],
+     position: [cueX, cueY],
      allowSleep: false,
-     //fixedRotation: true
+     fixedRotation: true,
+     angle: 3 * Math.PI / 4,
+     type: Body.KINEMATIC,
    });
-   cueBody.addShape( cueShape );
+   cueBody.addShape( cueShape1, [-cueArmOffset, 0])
+   cueBody.addShape( cueShape2, [0, cueArmOffset] );
    world.addBody( cueBody );
 
    cueBody.angularDamping = .6;
    cueBody.damping = .3;
 
    cue.userData.body = cueBody
-
-   //Init the constraint system for the cue
-   reticleNullBody = new Body({
-     //Reticle is at position 0,0 in relation to court
-     position: [cueX - cueWidth / 2, 0],
-     mass: 1000
-   });
-   world.addBody( reticleNullBody );
-
-   reticleNullBody2 = new Body({
-     //Reticle is at position 0,0 in relation to court
-     position: [cueX + cueWidth / 2, 0],
-     mass: 1000
-   });
-   world.addBody( reticleNullBody2 );   
-
-   let cueConstraint = new PrismaticConstraint( reticleNullBody, cueBody , {
-     localAnchorA: [0, 0],
-     localAnchorB: [-cueWidth/2, -cueDepth / 2],
-     upperLimit: 0,
-     lowerLimit: 0,
-     localAxisA: [0, -cueDepth/2]
-   });
-   world.addConstraint( cueConstraint );
-
-   let cueConstraint2 = new PrismaticConstraint( reticleNullBody2, cueBody , {
-     localAnchorA: [0, 0],
-     localAnchorB: [cueWidth / 2, -cueDepth / 2],
-     upperLimit: 0,
-     lowerLimit: 0,
-     localAxisA: [0, -cueDepth/2]
-   });
-   world.addConstraint( cueConstraint2 );
 
    window.cue = cue;
    showCue = true;
@@ -676,14 +672,20 @@
 
  function setCueCollisions(){
    if(currentPlayer == 'red'){
-     cueShape.collisionGroup = REDCUE;
-     cueShape.collisionMask = REDDISCS; 
+     cueShape1.collisionGroup = REDCUE;
+     cueShape1.collisionMask = REDDISCS;
+     cueShape2.collisionGroup = REDCUE;
+     cueShape2.collisionMask = REDDISCS; 
    }else if(currentPlayer == 'blue'){
-     cueShape.collisionGroup = BLUECUE;
-     cueShape.collisionMask = BLUEDISCS;
+     cueShape1.collisionGroup = BLUECUE;
+     cueShape1.collisionMask = BLUEDISCS;
+     cueShape2.collisionGroup = BLUECUE;
+     cueShape2.collisionMask = BLUEDISCS;
    }else{
-     cueShape.collisionGroup = BLUECUE | REDCUE;
-     cueShape.collisionMask = BLUEDISCS | REDDISCS;
+     cueShape1.collisionGroup = BLUECUE | REDCUE;
+     cueShape1.collisionMask = BLUEDISCS | REDDISCS;
+     cueShape2.collisionGroup = BLUECUE | REDCUE;
+     cueShape2.collisionMask = BLUEDISCS | REDDISCS;
    }
  }
 
@@ -725,6 +727,7 @@
      }
      disc.userData.body.velocity[0] = 0;
      disc.userData.body.velocity[1] = 0;
+     disc.userData.body.allowSleep = true;
      disc.userData.body.sleep();
      setDiscCollisionMask( disc );
    }
@@ -959,6 +962,38 @@
    currentTurnNumber = 0;
    oppositeSideInPlay = false;
    
+ }
+
+ function initDevKeyListeners(){
+   let d = .05
+   document.addEventListener('keydown', event => {
+     reticle.getWorldPosition(cursorPos)
+     //console.log(reticle.matrixWorld.elements)
+     switch(event.which){
+       case 38:
+         //up
+         //cursorMat.makeTranslation( cursorPos.x, cursorPos.y, cursorPos.z - d )
+         cursorPos.z -= d
+         break;
+       case 40:
+         //down
+         //cursorMat.makeTranslation( cursorPos.x, cursorPos.y, cursorPos.z + d )
+         cursorPos.z += d
+         break;
+       case 37:
+         //left
+         //cursorMat.makeTranslation( cursorPos.x - d, cursorPos.y, cursorPos.z )
+         cursorPos.x -= d;
+         break;
+       case 39:
+         //right
+         //cursorMat.makeTranslation( cursorPos.x + d, cursorPos.y, cursorPos.z )
+         cursorPos.x += d;
+         break;
+     }
+     //console.log(reticle.matrixWorld.elements)
+     reticle.matrix.setPosition(cursorPos.x, cursorPos.y, cursorPos.z)
+   });
  }
 
  
