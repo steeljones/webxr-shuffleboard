@@ -2,31 +2,26 @@
  export let sessionActive;
  export let currentControl;
  export let rendererComponent;
- export let showDebug;
  export let messageText;
  export let instructionsText;
-
  export let gameScore;
+
+ export let DEV_MODE;
+ export let DEBUG_MODE;
 
  import axios from 'axios';
  import { createEventDispatcher } from 'svelte';
  const dispatch = createEventDispatcher();
 
- const serverURL = window.location.protocol == 'http'
-                 ? window.location.origin.replace(window.location.port, 3000)
-                 : 'https://' + window.location.hostname + ':3001';
- const serverSaveURL = serverURL + '/saveScene'
- const serverLoadURL = serverURL + '/scene'
 
  let debugItems = {};
- let showMessage = false;
-
+ 
  let touchStartPoint = {x: 0, y:0};
 
- let matterDebugCanvas;
+ let debugCanvas;
  
- export function getMatterDebugCanvas(){
-   return matterDebugCanvas;
+ export function getDebugCanvas(){
+   return debugCanvas;
  }
 
  function handleARButtonClick(){
@@ -76,7 +71,7 @@
      on:touchmove={handleOverlayTouchMove}
      on:touchend={handleOverlayTouchEnd}>
   {#if sessionActive}
-  <div class="score">
+  <div class="DEBUG_MODE ? 'debug score' : 'score'">
     <div>
       Red: {gameScore.red}
     </div>
@@ -93,7 +88,7 @@
   </div>
 
   {/if}
-  {#if showDebug}
+  {#if DEBUG_MODE}
   <div class="debug-container">
     {#each Object.entries(debugItems) as [key, value]}
     <div class="debug-item">
@@ -101,7 +96,7 @@
     </div>
     {/each}
 
-    <div bind:this={matterDebugCanvas}></div>
+    <div bind:this={debugCanvas}></div>
   </div>
   {/if}
   <button class="ar-button" on:click="{handleARButtonClick}">{sessionActive ? 'END AR' : 'START AR'}</button>
@@ -159,7 +154,7 @@
      font-family: monospace;
      width: 100vw;
      position: fixed;
-     top: 48vh;
+     top: 42vh;
      text-align: center;
      text-transform: uppercase;
  }
@@ -170,12 +165,15 @@
      font-family: monospace;
      width: 100vw;
      position: fixed;
-     top: 60vh;
+     top: 54vh;
      text-align: center;
  }
  .hidden{
      opacity: 0;
      pointer-events: none;
+ }
+ .debug.score {
+     margin-left: 0vw;
  }
  .score {
      font-family: monospace;

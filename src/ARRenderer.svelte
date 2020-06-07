@@ -6,8 +6,10 @@
  export let overlayComponent;
  export let overlayContainer;
  export let currentControl;
- export let showDebug;
  export let gameScore;
+ 
+ export let DEV_MODE;
+ export let DEBUG_MODE;
   
  import * as THREE from 'three';
  import { Body, World, Circle, Plane, Box, Convex, DistanceConstraint, PrismaticConstraint, ContactMaterial, Material, vec2 } from "p2";
@@ -16,8 +18,6 @@
 
  import scoringAreas from './scoringAreas';
  const dispatch = createEventDispatcher();
-
- let DEV_MODE = window.location.search.includes( 'dev' );
 
  //Variables for app created three / p2 objects
  let canvas, camera, scene, renderer,
@@ -113,7 +113,7 @@
 
    dispatch('appLoaded', {});
    
-   if(showDebug){
+   if(DEBUG_MODE){
      setTimeout  ( () => initStats, 500 );
    }
 
@@ -322,7 +322,7 @@
 
      }
      
-     if( !DEV_MODE && showDebug ){
+     if( !DEV_MODE && DEBUG_MODE ){
        let pose = frame.getViewerPose(referenceSpace);
 
        if( pose ){
@@ -347,7 +347,7 @@
 
    renderer.render( scene, camera );
 
-   if(showDebug){
+   if(DEBUG_MODE){
      overlayComponent.renderDebug( debugInfo );
    }
 
@@ -534,8 +534,8 @@
 
      circleBody.addShape( circleShape );
      circleBody.damping = discDamping;
-     circleBody.sleepSpeedLimit = .1;
-     circleBody.sleepTimeLimit =  .2;
+     circleBody.sleepSpeedLimit = .05;
+     circleBody.sleepTimeLimit =  .4;
      //circleBody.sleepTimeLimit =  .5;
      
      world.addBody( circleBody );
@@ -764,9 +764,9 @@
      return
    }
    if(oppositeSideInPlay){
-     discs[ currentTurnNumber ].userData.body.force = [ (Math.random() - 0.5) * 4, (Math.random() * 4.0+ 16.5)];
+     discs[ currentTurnNumber ].userData.body.force = [ (Math.random() - 0.5) * 3, (Math.random() * 6.0+ 16.5)];
    }else{
-     discs[ currentTurnNumber ].userData.body.force = [ (Math.random() - 0.5) * 4, - (Math.random() * 4.0+ 16.5)];
+     discs[ currentTurnNumber ].userData.body.force = [ (Math.random() - 0.5) * 3, - (Math.random() * 6.0+ 16.5)];
    }
  }
 

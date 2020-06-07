@@ -21,14 +21,17 @@
  let messageText = '';
  let instructionsText = '';
 
+
+ let DEV_MODE = window.location.search.includes( 'dev' );
+ let DEBUG_MODE = window.location.search.includes( 'debug' );
+
  $:showOverlay = arReady && appReady;
 
  $: {
    //console.log('Current control changed: ', currentControl)
    window.currentControl = currentControl
  }
- let showDebug = true;
-
+ 
  if('xr' in navigator){
    navigator.xr.isSessionSupported('immersive-ar').then( supported => {
      arReady = supported;
@@ -73,11 +76,13 @@
  function handleGameOver({detail}){
    let { winner } = detail;
    messageText = 'Winner: ' + winner;
-   instructionsText = 'Tap to play again';
    console.log('GAME WON: ', winner);
+   setTimeout( enableTapToPlayAgain, 4000 );
+ }
+
+ function enableTapToPlayAgain(){
+   instructionsText = 'Tap to play again';
    currentControl = 'inactive';
-   //Reset score
-   //gameScore
  }
 
  function handleStartGame(){
@@ -109,8 +114,8 @@
 
 <main>
   <div bind:this={overlayContainer} class="overlay-container">
-    <Overlay  {sessionActive} {currentControl} {rendererComponent} {showDebug} {gameScore} {messageText}
-              {instructionsText}
+    <Overlay  {sessionActive} {currentControl} {rendererComponent} {gameScore} {messageText} {instructionsText}
+              {DEV_MODE} {DEBUG_MODE}
               on:startClick={handleStartClick}
               on:endClick={handleEndClick}              
               on:changeControls={handleChangeControls}
@@ -118,7 +123,8 @@
     />
   </div>
   <ARRenderer bind:this={rendererComponent} {overlayContainer} {currentControl} {overlayComponent} {gameScore}
-              {showDebug} on:appLoaded={initApp}
+              {DEV_MODE} {DEBUG_MODE}
+              on:appLoaded={initApp}
               on:changeControls={handleChangeControls}
               on:updateScore={handleUpdateScore}
               on:gameOver={handleGameOver}
