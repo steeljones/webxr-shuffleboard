@@ -17,8 +17,6 @@
  import scoringAreas from './scoringAreas';
  const dispatch = createEventDispatcher();
 
- 
-
  let DEV_MODE = window.location.search.includes( 'dev' );
 
  //Variables for app created three / p2 objects
@@ -68,7 +66,7 @@
  let discHeight = .01;
  let discMass = .425 * gameScale;//kg - not sure if it should be changed to grams
  let cueWidth = discRadius * 6;
- let cueHeight = discRadius;
+ let cueHeight = discRadius / 4;
  let cueDepth = discRadius / 2;
  let devModeCueOffset = -courtLength * .425;
  let discRestitution = 0.5;
@@ -175,7 +173,7 @@
 
    reticle = new THREE.Mesh(
      new THREE.PlaneBufferGeometry(.2, .2).rotateX( - Math.PI / 2),
-     new THREE.MeshBasicMaterial({map: reticleTexture, transparent: true, depthTest: false})
+     new THREE.MeshBasicMaterial({map: reticleTexture, transparent: true, depthTest: false, opacity: 0.5})
    );
    reticle.renderOrder = 1;
    reticle.matrixAutoUpdate = false;
@@ -209,6 +207,7 @@
          setDiscs();
          initCue();
          setCueCollisions();
+         reticle.material.opacity = .1;
        }
        break;
      case 'inactive':
@@ -248,6 +247,7 @@
    });
 
    world.sleepMode = World.BODY_SLEEPING;
+   world.defaultContactMaterial.friction = .1;
  }
 
  function animate() {
@@ -301,6 +301,7 @@
            
          }else{
 	   reticle.matrix.fromArray( hit.getPose( referenceSpace ).transform.matrix );
+
          }
 
          if( currentControl == 'court'){
@@ -358,76 +359,67 @@
 
  function updatePhysics(delta){
    world.step( fixedTimeStep, delta, maxSubSteps );
-   //discs.forEach( (disc,idx) => {
    for( let disc of discs ){
-     let pos = disc.userData.body.interpolatedPosition;
      disc.position.set(
-       pos[0],
+       disc.userData.body.interpolatedPosition[0],
        discHeight,
-       pos[1]
+       disc.userData.body.interpolatedPosition[1]
      )
      disc.applyMatrix4( court.matrix );
    }
 
    if(showCue){
+     updateCue();
+   }
+ }
 
-     //let cueAngle = cursorEuler.y;
-     let cueAngle = cue.userData.body.angle;
-     
-     let cuePos = cue.userData.body.interpolatedPosition;
+ function updateCue(){
+   //Update cue position and angle based on the reticle position and angle
+   
+   //Get previous cue physics body position and angle and use it to update graphics
+   cursorPos.set( cue.userData.body.interpolatedPosition[0], discHeight, cue.userData.body.interpolatedPosition[1] );
+   cursorScale.set(1, 1, 1);
+   cursorQuat.setFromAxisAngle( new THREE.Vector3( 0, -1, 0 ), cue.userData.body.angle );
+   cue.matrix.compose(cursorPos, cursorQuat, cursorScale);
+   cue.applyMatrix4( court.matrixWorld );
 
-     let quaternion = new THREE.Quaternion();
+   //Get cursor matrix to use in calculating where cue physics body should be updated to
+   cursorMat.getInverse( court.matrixWorld );
+   cursorMat.multiply( reticle.matrixWorld );     
+   cursorMat.decompose( cursorPos, cursorQuat, cursorScale );
+   cursorEuler.setFromQuaternion( cursorQuat );
 
-     cursorPos.set( cuePos[0], discHeight, cuePos[1] );
-     cursorScale.set(1, 1, 1);
-     cursorQuat.setFromAxisAngle( new THREE.Vector3( 0, -1, 0 ), cueAngle );
-     cue.matrix.compose(cursorPos, cursorQuat, cursorScale);
-     cue.applyMatrix4( court.matrixWorld );
-
-
-     cursorMat.getInverse( court.matrixWorld );
-     cursorMat.multiply( reticle.matrixWorld );     
-     cursorMat.decompose( cursorPos, cursorQuat, cursorScale );
-     cursorEuler.setFromQuaternion( cursorQuat );
-
-     //cue.userData.body.angle = cursorEuler.y;
-
-     let offset = [Math.cos(cursorEuler.y), Math.sin(cursorEuler.y)];
-     let delta = [0,0];
-     if(DEV_MODE){
-       if(oppositeSideInPlay){
-         //vec2.set( reticleNullBody.position, cursorPos.x - cueWidth / 2 - offset[0], -1 * (cursorPos.z - offset[1] - devModeCueOffset));
-         //vec2.set( reticleNullBody2.position, cursorPos.x + cueWidth / 2 + offset[0], -1 * (cursorPos.z + offset[1] - devModeCueOffset));
-         vec2.sub(delta, [cursorPos.x, cursorPos.z], cue.userData.body.position);
-         vec2.set( cue.userData.body.velocity, delta[0]*10, delta[1]*10);
-       }else{
-         vec2.sub(delta, [cursorPos.x, cursorPos.z], cue.userData.body.position);
-         vec2.set( cue.userData.body.velocity, delta[0]*10, delta[1]*10);
-       }
-     }else{
-       vec2.sub(delta, [cursorPos.x, cursorPos.z], cue.userData.body.position);
-       vec2.set( cue.userData.body.velocity, delta[0]*5, delta[1]*5);
-     }
-
-     //Test if currentDisc has been thrown
-     if( currentControl == 'throw' && discs[ currentTurnNumber ].status == 'oncue'){
-       testForThrownDisc();
-     }else if( currentControl == 'throw' && discs[ currentTurnNumber ].status == 'inplay' ){
-       testForThrowOver();
-     }
-
-     /*
-     if(Math.random() > .8){
-       debugInfo['cueAngle'] = (cueAngle / Math.PI * 180).toFixed(0);
-       debugInfo['angleY'] = (cursorEuler.y / Math.PI * 180).toFixed(0);
-       debugInfo['rnb'] = reticleNullBody.position[0].toFixed(3);
-       debugInfo['rnb2'] = reticleNullBody2.position[0].toFixed(3);
-       debugInfo['cuebody'] = cue.userData.body.position[0].toFixed(3);
-     }
-     */
-
+   //Set angle of cue
+   let angle = cursorQuat.angleTo(new THREE.Quaternion()) * Math.sign(cursorEuler.y);
+   if(angle < -Math.PI/2 && angle > -Math.PI){
+     cue.userData.body.angle = 3 * Math.PI / 4 - angle
+   }else if(Math.abs(angle) > Math.PI/2){
+     cue.userData.body.angle = 3 * Math.PI / 4 - cursorQuat.angleTo(new THREE.Quaternion())
+   }else{
+     cue.userData.body.angle = 3 * Math.PI / 4 - cursorEuler.y;
    }
 
+   //Update cue velocity based on difference between current reticle position and last cue position
+   let deltaPos = [0,0];
+   if(DEV_MODE){
+     if(oppositeSideInPlay){
+       vec2.sub(deltaPos, [cursorPos.x, cursorPos.z], cue.userData.body.position);
+       vec2.set( cue.userData.body.velocity, deltaPos[0]*10, deltaPos[1]*10);
+     }else{
+       vec2.sub(deltaPos, [cursorPos.x, cursorPos.z], cue.userData.body.position);
+       vec2.set( cue.userData.body.velocity, deltaPos[0]*10, deltaPos[1]*10);
+     }
+   }else{
+     vec2.sub(deltaPos, [cursorPos.x, cursorPos.z], cue.userData.body.position);
+     vec2.set( cue.userData.body.velocity, deltaPos[0]*5, deltaPos[1]*5);
+   }
+
+   //Test if currentDisc has been thrown
+   if( currentControl == 'throw' && discs[ currentTurnNumber ].status == 'oncue'){
+     testForThrownDisc();
+   }else if( currentControl == 'throw' && discs[ currentTurnNumber ].status == 'inplay' ){
+     testForThrowOver();
+   }
  }
 
  function onWindowResize() {
@@ -535,15 +527,15 @@
      }else{
        circleShape.collisionGroup = BLUEDISCS;
      }
-     let circleBody = new Body({mass: discMass, position: [x, z], allowSleep: false});
+     let circleBody = new Body({mass: discMass, position: [x, z], allowSleep: false, fixedRotation: true});
 
      //circleShape1.material = new p2.Material();
      circleShape.material = p2Material;
 
      circleBody.addShape( circleShape );
-     circleBody.damping = discDamping;;
+     circleBody.damping = discDamping;
      circleBody.sleepSpeedLimit = .1;
-     circleBody.sleepTimeLimit =  1;
+     circleBody.sleepTimeLimit =  .2;
      //circleBody.sleepTimeLimit =  .5;
      
      world.addBody( circleBody );
@@ -623,11 +615,11 @@
    let armWidth = cueWidth / 2;
    let cueArmOffset = armWidth/2 - cueDepth/2;
    let cue1 = new THREE.Mesh(
-     new THREE.BoxBufferGeometry(armWidth, cueHeight, cueDepth).translate(-cueArmOffset, 0, 0),
+     new THREE.BoxBufferGeometry(armWidth, cueHeight, cueDepth).translate(-cueArmOffset, cueHeight/2, 0),
      mat
    );
    let cue2 = new THREE.Mesh(
-     new THREE.BoxBufferGeometry(cueDepth, cueHeight, armWidth).translate(0, 0, cueArmOffset),
+     new THREE.BoxBufferGeometry(cueDepth, cueHeight, armWidth).translate(0, cueHeight/2, cueArmOffset),
      mat
    );
    cue.add( cue1 );
@@ -772,9 +764,9 @@
      return
    }
    if(oppositeSideInPlay){
-     discs[ currentTurnNumber ].userData.body.force = [ (Math.random() - 0.5) * .6, (Math.random() * 2.0+ 4.5)];
+     discs[ currentTurnNumber ].userData.body.force = [ (Math.random() - 0.5) * 4, (Math.random() * 4.0+ 16.5)];
    }else{
-     discs[ currentTurnNumber ].userData.body.force = [ (Math.random() - 0.5) * .6, - (Math.random() * 2.0+ 4.5)];
+     discs[ currentTurnNumber ].userData.body.force = [ (Math.random() - 0.5) * 4, - (Math.random() * 4.0+ 16.5)];
    }
  }
 
@@ -894,19 +886,14 @@
    let redScore = 0,
        blueScore = 0;
    
-   Object.values(world.overlapKeeper.overlappingShapesCurrentState.data).forEach( o => {
-     if(o.shapeA instanceof Convex){
-       if(o.bodyA.aabb.containsPoint(o.bodyB.position)){
-         roundScores[o.shapeB.threeObj.userData.discColor] += o.bodyA.scoreValue
-         sensorOverlaps.push({overlap: o, score: o.bodyA.scoreValue, color: o.shapeB.threeObj.userData.discColor})
-       }
-     }else if(o.shapeB instanceof Convex){
-       if(o.bodyB.aabb.containsPoint(o.bodyA.position)){
-         roundScores[o.shapeA.threeObj.userData.discColor] += o.bodyB.scoreValue
-         sensorOverlaps.push({overlap: o, score: o.bodyB.scoreValue, color: o.shapeA.threeObj.userData.discColor})
-       }
+   for( let d of discs ){
+     let hitTestResult = world.hitTest(d.userData.body.position, scoreAreas);
+
+     if(hitTestResult && hitTestResult.length > 0){
+       roundScores[d.userData.discColor] += hitTestResult[0].scoreValue
+       sensorOverlaps.push({score: hitTestResult[0].scoreValue, color: d.userData.discColor})       
      }
-   });
+   }
    roundScores.blue = Math.max(roundScores.blue, 0)
    roundScores.red = Math.max(roundScores.red, 0)
    return { sensorOverlaps, roundScores }
@@ -935,10 +922,7 @@
  function handleThrowOver(){
    console.log('THROW OVER')
    if(currentTurnNumber >= discs.length - 1){
-     discs.forEach( disc => disc.userData.body.wakeUp() );
-     setTimeout( () => {
-       handleRoundOver()
-     }, 1 );
+     handleRoundOver()
    }else{
      moveOnToNextTurn();
    }
@@ -965,7 +949,7 @@
  }
 
  function initDevKeyListeners(){
-   let d = .05
+   let d = .025
    document.addEventListener('keydown', event => {
      reticle.getWorldPosition(cursorPos)
      //console.log(reticle.matrixWorld.elements)
