@@ -44,12 +44,14 @@
  function handleOverlayClick(){
    //console.log('overlay click')
  }
+ 
  function handleOverlayTouchStart(event){
    if(currentControl == 'expand'){
      let {pageX, pageY} = event.targetTouches[0];
      touchStartPoint = { x: pageX, y: pageY };
    }
  }
+ 
  function handleOverlayTouchMove(event){
    if(currentControl == 'expand'){
      let { pageX, pageY } = event.targetTouches[0];
@@ -58,6 +60,7 @@
      rendererComponent.handleExpandTouchMove(deltaX, deltaY)
    }
  }
+ 
  function handleOverlayTouchEnd(event){
    if(currentControl == 'expand'){
      rendererComponent.handleExpandTouchEnd();
@@ -71,7 +74,7 @@
      on:touchmove={handleOverlayTouchMove}
      on:touchend={handleOverlayTouchEnd}>
   {#if sessionActive}
-  <div class="DEBUG_MODE ? 'debug score' : 'score'">
+  <div class="{DEBUG_MODE ? 'debug score' : 'score'}">
     <div>
       Red: {gameScore.red}
     </div>
