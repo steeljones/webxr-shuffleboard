@@ -2,28 +2,29 @@
 
 <script>
  import Overlay from './Overlay.svelte';
- import ARRenderer from './ARRenderer.svelte'; 
+ import ARRenderer from './ARRenderer.svelte';
 
+ let DEV_MODE = window.location.search.includes( 'dev' );
+ let DEBUG_MODE = window.location.search.includes( 'debug' );
 
  let overlayComponent, rendererComponent, overlayContainer;
 
  let arReady = false;
  let appReady = false;
- let sessionActive = window.location.search == '?overlay' ? true : false;
+ let sessionActive = window.location.search.includes( 'overlay' )? true : false;
  //let sessionActive = true;
 
  let controls = ['court', 'throw']
  let currentControl = 'court';
 
  let gameScore = { red: 0, blue: 0 };
- window.gameScore = gameScore
-
+ 
  let messageText = '';
  let instructionsText = '';
 
-
- let DEV_MODE = window.location.search.includes( 'dev' );
- let DEBUG_MODE = window.location.search.includes( 'debug' );
+ //Variables set in dat.gui that then get passed to renderer
+ let gameScale = DEV_MODE ? 1 / 2 : 1 / 3;
+ let numDiscs = 2;
 
  $:showOverlay = arReady && appReady;
 
@@ -92,11 +93,21 @@
    messageText = '';
    instructionsText = '';
  }
+
+ function handleUpdateValueFromOverlay({detail}){
+   let [key, value] = Object.entries(detail)[0];
+   if(key == 'gameScale'){
+     gameScale = value;
+   }else if(key == 'numDiscs'){
+     numDiscs = value;
+   }
+ }
  
  //Overlay doesn't work on webxr emulator, so expose function on window for development
  window.handleChangeControls = handleChangeControls;
  window.hus = handleUpdateScore
  window.hgo = handleGameOver
+ window.updateValue = handleUpdateValueFromOverlay
   
 </script>
 
@@ -115,14 +126,17 @@
 <main>
   <div bind:this={overlayContainer} class="overlay-container">
     <Overlay  {sessionActive} {currentControl} {rendererComponent} {gameScore} {messageText} {instructionsText}
+              {gameScale} {numDiscs}
               {DEV_MODE} {DEBUG_MODE}
               on:startClick={handleStartClick}
               on:endClick={handleEndClick}              
               on:changeControls={handleChangeControls}
+              on:updateValue={handleUpdateValueFromOverlay}
               bind:this={overlayComponent}
     />
   </div>
   <ARRenderer bind:this={rendererComponent} {overlayContainer} {currentControl} {overlayComponent} {gameScore}
+              {gameScale} {numDiscs}
               {DEV_MODE} {DEBUG_MODE}
               on:appLoaded={initApp}
               on:changeControls={handleChangeControls}

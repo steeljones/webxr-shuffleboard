@@ -5,25 +5,31 @@
  export let messageText;
  export let instructionsText;
  export let gameScore;
+ export let gameScale;
+ export let numDiscs;
 
  export let DEV_MODE;
  export let DEBUG_MODE;
 
  import axios from 'axios';
  import { createEventDispatcher } from 'svelte';
+ import * as dat from 'dat.gui';
+ 
  const dispatch = createEventDispatcher();
 
-
- let debugItems = {};
+ let debugItems = {
+ };
  
  let touchStartPoint = {x: 0, y:0};
 
- let debugCanvas;
- 
- export function getDebugCanvas(){
-   return debugCanvas;
- }
+ let debugCanvas,
+     debugContainer,
+     gui;
 
+ if(DEBUG_MODE){
+   initDatGui();
+ }
+ 
  function handleARButtonClick(){
    if(!sessionActive){
      dispatch('startClick', {});
@@ -66,13 +72,39 @@
      rendererComponent.handleExpandTouchEnd();
    }
  }
+
+ function initDatGui(){
+   gui = new dat.GUI({autoPlace: false});
+   let values = {gameScale, numDiscs};
+   let scaleController = gui.add(values, 'gameScale', .1, 1.0);
+   let numDiscsController = gui.add(values, 'numDiscs', 2, 32, 1);
+   //scaleController.onChange(handleValueChange)
+   scaleController.onFinishChange(handleValueChange)
+   numDiscsController.onFinishChange(handleValueChange)
+
+   gui.domElement.style.zIndex = 1000;
+   gui.domElement.style.height = '80px';
+   setTimeout( () => {
+     //Move gui to overlay
+     debugContainer.prepend(gui.domElement);
+   }, 1 );
+ }
+
+ function handleValueChange(value){
+   let data = {};
+   data[this.property] = value;
+   dispatch('updateValue', data);
+   rendererComponent.lockUIForATick();
+ }
  
 </script>
 
 <div class="overlay" on:click={handleOverlayClick}
      on:touchstart|self={handleOverlayTouchStart}
      on:touchmove={handleOverlayTouchMove}
-     on:touchend={handleOverlayTouchEnd}>
+     on:touchend={handleOverlayTouchEnd}
+     
+>
   {#if sessionActive}
   <div class="{DEBUG_MODE ? 'debug score' : 'score'}">
     <div>
@@ -92,7 +124,9 @@
 
   {/if}
   {#if DEBUG_MODE}
-  <div class="debug-container">
+  <div class="debug-container"
+       bind:this={debugContainer}
+  >
     {#each Object.entries(debugItems) as [key, value]}
     <div class="debug-item">
       {key + ': ' + value}
@@ -134,7 +168,7 @@
      top: 0;
      background-color: rgba(0, 0, 0, 0.3);
      color: red;
-     padding: 5px;
+     padding-bottom: 5px;
      font-family: monospace;
      font-size: 11px;
      border-radius: 0px 0px 0px 5px;
@@ -191,7 +225,7 @@
      margin-left: 30vw;
      padding: 8px;
  }
- 
+
 </style>  
 
 

@@ -7,6 +7,8 @@
  export let overlayContainer;
  export let currentControl;
  export let gameScore;
+ export let gameScale;
+ export let numDiscs;
  
  export let DEV_MODE;
  export let DEBUG_MODE;
@@ -56,19 +58,20 @@
      fixedTimeStep = 1 / 60,
      maxSubSteps = 10;
 
- //p2/three parameter variables
- let anchorHeight = .2;
- let gameScale = DEV_MODE ? 1 / 2 : 1 / 3;
+ //Params that get changed from dat.gui
  let courtWidth = 1.5 * gameScale;
  let courtLength = 9.1 * gameScale;
- let courtHeight = .02;
  let discRadius = .1 * gameScale;
- let discHeight = .01;
  let discMass = .425 * gameScale;//kg - not sure if it should be changed to grams
  let cueWidth = discRadius * 6;
  let cueHeight = discRadius / 4;
  let cueDepth = discRadius / 2;
  let devModeCueOffset = -courtLength * .425;
+ 
+ //p2/three parameter variables
+ let anchorHeight = .2;
+ let courtHeight = .02;
+ let discHeight = .01;
  let discRestitution = 0.5;
  let discDamping = 0.4
   
@@ -101,14 +104,22 @@
  let stats;
  let debugInfo = {};
 
+ //Watchers
+ $: {
+   //gameScale watcher
+   gameScale = gameScale;
+   handleGameScaleChange();
+
+ }
+
  init();
  
  function init(){
    initP2Physics();
    initScene();
    initCourt();
-   addCourtSensors();
-   initDiscs();
+//addCourtSensors();
+  // initDiscs();
    animate();
 
    dispatch('appLoaded', {});
@@ -202,6 +213,8 @@
    switch ( currentControl ){
      case 'court':
        if ( reticle.visible) {
+         addCourtSensors();
+         initDiscs();
          setCourt();
          addBounds();
          setDiscs();
@@ -347,10 +360,12 @@
 
    renderer.render( scene, camera );
 
+   /*
    if(DEBUG_MODE){
      overlayComponent.renderDebug( debugInfo );
    }
-
+   */
+   
    if( stats ){
      stats.end();
    }
@@ -485,8 +500,6 @@
  function initDiscs(){
    let discGeometry = new THREE.CylinderBufferGeometry( discRadius, discRadius, discHeight, 32, 1 );
 
-   let numDiscs = 8;
-   
    for(let i = 0; i < numDiscs; i++) {
      let material = new THREE.MeshBasicMaterial( );
      let disc = new THREE.Mesh( discGeometry, material );
@@ -764,9 +777,15 @@
      return
    }
    if(oppositeSideInPlay){
-     discs[ currentTurnNumber ].userData.body.force = [ (Math.random() - 0.5) * 3, (Math.random() * 6.0+ 16.5)];
+     discs[ currentTurnNumber ].userData.body.force = [
+       (Math.random() - 0.5) * 6 * gameScale,
+       (Math.random() * 6.0+ 16.5) * gameScale * 2
+     ];
    }else{
-     discs[ currentTurnNumber ].userData.body.force = [ (Math.random() - 0.5) * 3, - (Math.random() * 6.0+ 16.5)];
+     discs[ currentTurnNumber ].userData.body.force = [
+       (Math.random() - 0.5) * 6 * gameScale,
+       - (Math.random() * 6.0+ 16.5) * gameScale * 2
+     ];
    }
  }
 
@@ -956,22 +975,18 @@
      switch(event.which){
        case 38:
          //up
-         //cursorMat.makeTranslation( cursorPos.x, cursorPos.y, cursorPos.z - d )
          cursorPos.z -= d
          break;
        case 40:
          //down
-         //cursorMat.makeTranslation( cursorPos.x, cursorPos.y, cursorPos.z + d )
          cursorPos.z += d
          break;
        case 37:
          //left
-         //cursorMat.makeTranslation( cursorPos.x - d, cursorPos.y, cursorPos.z )
          cursorPos.x -= d;
          break;
        case 39:
          //right
-         //cursorMat.makeTranslation( cursorPos.x + d, cursorPos.y, cursorPos.z )
          cursorPos.x += d;
          break;
      }
@@ -980,12 +995,25 @@
    });
  }
 
+ function handleGameScaleChange(){
+   let scaleFactor = 1.5 * gameScale / courtWidth
+   courtWidth = 1.5 * gameScale;
+   courtLength = 9.1 * gameScale;
+   discRadius = .1 * gameScale;
+   discMass = .425 * gameScale;//kg - not sure if it should be changed to grams
+   cueWidth = discRadius * 6;
+   cueHeight = discRadius / 4;
+   cueDepth = discRadius / 2;
+   devModeCueOffset = -courtLength * .425;
+   court.geometry.scale( scaleFactor, 1, scaleFactor )
+ }
+ 
  
  window.getRoundScores = getRoundScores
  window.handleRoundOver = handleRoundOver;
  window.sdd = setDiscsDamping
  window.hto = handleThrowOver
-
+ 
 </script>
 
 <style>
