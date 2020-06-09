@@ -24,8 +24,8 @@
  let instructionsText = '';
 
  //Variables set in dat.gui that then get passed to renderer
- let gameScale = DEV_MODE ? 1 / 2 : 1 / 3;
- let numDiscs = 2;
+ let gameScale = DEV_MODE ? 1 / 2 : 1 / 2;
+ let numDiscs = 8;
 
  $:showOverlay = arReady && appReady;
 

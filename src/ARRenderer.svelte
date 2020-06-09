@@ -260,7 +260,7 @@
    });
 
    world.sleepMode = World.BODY_SLEEPING;
-   world.defaultContactMaterial.friction = .05;
+   world.defaultContactMaterial.friction = .01;
  }
 
  function animate() {
@@ -599,21 +599,23 @@
    world.islandSplit = true;
 */
    
-   let mat = new THREE.MeshBasicMaterial( {color: 0xff00ff} );
+   let cueMaterial = new THREE.MeshBasicMaterial( {color: 0xff00ff} );
    cue = new THREE.Group();
+
    let armWidth = cueWidth / 2;
    let cueArmOffset = armWidth/2 - cueDepth/2;
+   
    let cue1 = new THREE.Mesh(
      new THREE.BoxBufferGeometry(armWidth, cueHeight, cueDepth).translate(-cueArmOffset, cueHeight/2, 0),
-     mat
+     cueMaterial
    );
    let cue2 = new THREE.Mesh(
      new THREE.BoxBufferGeometry(cueDepth, cueHeight, armWidth).translate(0, cueHeight/2, cueArmOffset),
-     mat
+     cueMaterial
    );
    cue.add( cue1 );
    cue.add( cue2 );
-   cue.material = mat;
+   cue.material = cueMaterial;
    scene.add(cue);
    let cueX = 0,
        cueY = 0;
@@ -755,12 +757,12 @@
    if(oppositeSideInPlay){
      discs[ currentTurnNumber ].userData.body.force = [
        (Math.random() - 0.5) * 6 * gameScale,
-       (Math.random() * 6.0+ 16.5) * gameScale * 2
+       (Math.random() * 8.0+ 16.5) * gameScale * 2
      ];
    }else{
      discs[ currentTurnNumber ].userData.body.force = [
        (Math.random() - 0.5) * 6 * gameScale,
-       - (Math.random() * 6.0+ 16.5) * gameScale * 2
+       - (Math.random() * 8.0+ 16.5) * gameScale * 2
      ];
    }
  }
