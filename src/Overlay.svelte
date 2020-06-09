@@ -22,6 +22,8 @@
  
  let touchStartPoint = {x: 0, y:0};
 
+ let displayDiscControls = false;
+
  //Score to display -- gets incremented when gameScore changes to animate in points being added
  let displayScore = {red: 0, blue: 0}
 
@@ -113,7 +115,16 @@
    dispatch('updateValue', data);
    rendererComponent.lockUIForATick();
  }
- 
+
+ function handleApplyForceClick(forceArray = [1,1]){
+   rendererComponent.applyForceToThrownDisc(forceArray);
+   rendererComponent.lockUIForATick();
+ }
+
+ export function setDiscControlDisplayState(displayState){
+   displayDiscControls = displayState;
+ }
+
 </script>
 
 <div class="overlay" on:click={handleOverlayClick}
@@ -137,6 +148,21 @@
   </div>
   <div class="{instructionsText ? 'instructions' : 'hidden instructions'}">
     { instructionsText }
+  </div>
+
+  <div class="inplay-container" class:hidden={!displayDiscControls}>
+    <button class="up" on:click="{handleApplyForceClick.bind(this, [0, 1])}">
+      &#8593;
+    </button>
+    <button class="left" on:click="{handleApplyForceClick.bind(this, [-1, 0])}">
+      &#8592;
+    </button>
+    <button class="right" on:click="{handleApplyForceClick.bind(this, [1, 0])}">
+      &#8594;
+    </button>
+    <button class="down" on:click="{handleApplyForceClick.bind(this, [0, -1])}">
+      &#8595;
+    </button>
   </div>
 
   {/if}
@@ -242,7 +268,29 @@
      margin-left: 30vw;
      padding: 8px;
  }
-
+ .inplay-container button {
+     position: fixed;
+     width: 60px;
+     height: 60px;
+     opacity: 0.5;
+     border-radius: 4px;
+ }
+ .inplay-container button.up{
+     top: 15vh;
+     left: calc(50vw - 30px);
+ }
+ .inplay-container button.down{
+     bottom: 15vh;
+     left: calc(50vw - 30px);
+ }
+ .inplay-container button.left{
+     top: calc(50vh - 30px);
+     left: 4vh;
+ }
+ .inplay-container button.right{
+     top: calc(50vh - 30px);
+     right: 4vh;
+ }
 </style>  
 
 

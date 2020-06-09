@@ -227,18 +227,16 @@
        startGame();
        break;
      case 'throw':
-       if(DEV_MODE){
+       if(DEV_MODE && discs[ currentTurnNumber ].status != 'inplay'){
          throwCurrentDisc();
        }else if( discs[ currentTurnNumber ].status != 'inplay'){
          resetCurrentDisc();
        }else{
-         discs[ currentTurnNumber ].userData.body.force[0] = -.2 * discs[ currentTurnNumber ].userData.body.velocity[0];
-         discs[ currentTurnNumber ].userData.body.force[1] = -.2 * discs[ currentTurnNumber ].userData.body.velocity[1];
+         applyForceToThrownDisc([-1, -1])
        }
        break;
    }
  }
- window.handleSelect = handleSelect
 
  function handleSelectStart(event){
    
@@ -247,12 +245,6 @@
  function handleSelectEnd(){
    
  }
-
- function handleClick(event){
-   
- }
-
-
 
  function initP2Physics(){
    world = new World({
@@ -908,6 +900,7 @@
    discs[currentTurnNumber].status = 'inplay'
    discs[currentTurnNumber].userData.body.allowSleep = true;
    setDiscCollisionMask( discs[ currentTurnNumber ] )
+   overlayComponent.setDiscControlDisplayState(true);
  }
 
  function testForThrowOver(){
@@ -924,6 +917,7 @@
    }else{
      moveOnToNextTurn();
    }
+   overlayComponent.setDiscControlDisplayState(false);
  }
 
  function testForGameOver(){
@@ -985,6 +979,12 @@
    cueDepth = discRadius / 2;
    devModeCueOffset = -courtLength * .425;
    court.geometry.scale( scaleFactor, 1, scaleFactor )
+ }
+
+ export function applyForceToThrownDisc([xFactor, yFactor]){
+   //xFactor and yFactor are applied relative to the direction of the velocity vector
+   discs[ currentTurnNumber ].userData.body.force[0] = discs[ currentTurnNumber ].userData.body.velocity[0] * xFactor * 2;
+   discs[ currentTurnNumber ].userData.body.force[1] = discs[ currentTurnNumber ].userData.body.velocity[1] * yFactor * 2;
  }
  
  
