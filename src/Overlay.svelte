@@ -22,12 +22,29 @@
  
  let touchStartPoint = {x: 0, y:0};
 
+ //Score to display -- gets incremented when gameScore changes to animate in points being added
+ let displayScore = {red: 0, blue: 0}
+
  let debugCanvas,
      debugContainer,
      gui;
 
  if(DEBUG_MODE){
    initDatGui();
+ }
+
+ //Watchers
+ $: {
+   //Increment the displayScore in
+   if(displayScore.red < gameScore.red){
+     setTimeout(() => {
+       displayScore.red++;
+     }, 50)
+   }else if(displayScore.blue < gameScore.blue){
+     setTimeout(() => {
+       displayScore.blue++;
+     }, 50)
+   }
  }
  
  function handleARButtonClick(){
@@ -108,11 +125,11 @@
   {#if sessionActive}
   <div class="{DEBUG_MODE ? 'debug score' : 'score'}">
     <div>
-      Red: {gameScore.red}
+      Red: {displayScore.red}
     </div>
 
     <div>
-      Blue: {gameScore.blue}
+      Blue: {displayScore.blue}
     </div>
   </div>
   <div class="{messageText ? 'message' : 'hidden message'}">

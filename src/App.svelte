@@ -18,6 +18,7 @@
  let currentControl = 'court';
 
  let gameScore = { red: 0, blue: 0 };
+ window.gameScore = gameScore
  
  let messageText = '';
  let instructionsText = '';
@@ -67,16 +68,21 @@
  }
 
  function handleUpdateScore({detail}){
-   let {color, value} = detail
- 
-   gameScore[color] += value;
-   //gameScore = gameScore;
-   console.log(gameScore)
+   let {color, value, gameOver} = detail
+
+   if(value > 0){
+     //TODO - play sound effect
+     gameScore[color] += value;     
+   }
+   if(!gameOver){
+     messageText = 'Round Over'
+     instructionsText = 'Move to other end of court';
+   }
  }
 
  function handleGameOver({detail}){
    let { winner } = detail;
-   messageText = 'Winner: ' + winner;
+   messageText = 'WINNER: ' + winner.toUpperCase();
    console.log('GAME WON: ', winner);
    setTimeout( enableTapToPlayAgain, 4000 );
  }
@@ -94,6 +100,12 @@
    instructionsText = '';
  }
 
+ function handleStartRound(){
+   messageText = '';
+   instructionsText = '';
+   currentControl = 'throw'
+ }
+
  function handleUpdateValueFromOverlay({detail}){
    let [key, value] = Object.entries(detail)[0];
    if(key == 'gameScale'){
@@ -102,12 +114,15 @@
      numDiscs = value;
    }
  }
- 
- //Overlay doesn't work on webxr emulator, so expose function on window for development
- window.handleChangeControls = handleChangeControls;
- window.hus = handleUpdateScore
- window.hgo = handleGameOver
- window.updateValue = handleUpdateValueFromOverlay
+
+ if(DEV_MODE){
+   //Overlay doesn't work on webxr emulator, so expose function on window for development
+   window.handleChangeControls = handleChangeControls;
+   window.handleUpdateScore = handleUpdateScore
+   window.handleGameOver = handleGameOver
+   window.updateValue = handleUpdateValueFromOverlay
+   window.handleUpdateScore = handleUpdateScore;
+ }
   
 </script>
 
@@ -143,6 +158,7 @@
               on:updateScore={handleUpdateScore}
               on:gameOver={handleGameOver}
               on:startGame={handleStartGame}
+              on:startRound={handleStartRound}
   />
 
 </main>

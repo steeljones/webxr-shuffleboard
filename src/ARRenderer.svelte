@@ -260,7 +260,7 @@
    });
 
    world.sleepMode = World.BODY_SLEEPING;
-   world.defaultContactMaterial.friction = .1;
+   world.defaultContactMaterial.friction = .05;
  }
 
  function animate() {
@@ -268,26 +268,19 @@
  }
 
  function render( timestamp, frame ) {
-
    if( stats ){
      stats.begin();
    }
 
    if ( frame ) {
-
-     var referenceSpace = renderer.xr.getReferenceSpace();
-     var session = renderer.xr.getSession();
+     let referenceSpace = renderer.xr.getReferenceSpace();
+     let session = renderer.xr.getSession();
 
      if ( hitTestSourceRequested === false ) {
-
        session.requestReferenceSpace( 'viewer' ).then( function ( referenceSpace ) {
-
 	 session.requestHitTestSource( { space: referenceSpace } ).then( function ( source ) {
-
 	   hitTestSource = source;
-
 	 } );
-
        } );
 /*
        session.addEventListener( 'end', function () {
@@ -298,23 +291,18 @@
        } );
 */
        hitTestSourceRequested = true;
-
      }
 
      if ( hitTestSource ) {
-
-       var hitTestResults = frame.getHitTestResults( hitTestSource );
-
+       let hitTestResults = frame.getHitTestResults( hitTestSource );
        if ( hitTestResults.length ) {
-
-	 var hit = hitTestResults[ 0 ];
-
+	 let hit = hitTestResults[ 0 ];
          reticle.visible = true;
+         
          if(DEV_MODE && currentControl != 'court'){
            
          }else{
 	   reticle.matrix.fromArray( hit.getPose( referenceSpace ).transform.matrix );
-
          }
 
          if( currentControl == 'court'){
@@ -322,22 +310,17 @@
            court.visible = true;
            court.matrix.copy( reticle.matrix );
          }
-
-
        } else {
-         
 	 reticle.visible = false;
          if( currentControl == 'court' ){
            court.visible = false;
          }
-
        }
-
      }
-     
-     if( !DEV_MODE && DEBUG_MODE ){
-       let pose = frame.getViewerPose(referenceSpace);
 
+     /*
+     if( DEBUG_MODE ){
+       let pose = frame.getViewerPose(referenceSpace);
        if( pose ){
          let { x, y, z } = pose.views[0].transform.position;
          debugInfo.viewer = [ x.toFixed(2), y.toFixed(2), z.toFixed(2) ];
@@ -347,11 +330,11 @@
          reticle.matrixWorld.decompose( cursorPos, cursorQuat, cursorScale )
          debugInfo['reticle'] = cursorPos.toArray().map( p => p.toFixed(2) );
        }
-
+       //overlayComponent.renderDebug( debugInfo );
      }
+     */
 
    }
-
 
    let dt = clock.getDelta();
    if(courtSet){
@@ -359,17 +342,10 @@
    }
 
    renderer.render( scene, camera );
-
-   /*
-   if(DEBUG_MODE){
-     overlayComponent.renderDebug( debugInfo );
-   }
-   */
    
    if( stats ){
      stats.end();
    }
-
  }
 
  function updatePhysics(delta){
@@ -799,29 +775,29 @@
  function handleRoundOver(){
    let { sensorOverlaps, roundScores } = getRoundScores()
 
-   let roundWinner;
+   let roundWinner, scoreDiff;
    if(roundScores.red > roundScores.blue){
      roundWinner = 'red'
      console.log( 'Red: ', roundScores.red - roundScores.blue)
-     dispatch('updateScore', {color: 'red', value: roundScores.red - roundScores.blue})
-     //gameScore.red += roundScores.red - roundScores.blue
+     scoreDiff = roundScores.red - roundScores.blue;
    }else if(roundScores.blue > roundScores.red){
      roundWinner = 'blue'
      console.log( 'Blue: ', - roundScores.red + roundScores.blue)
-     //gameScore.blue += roundScores.blue - roundScores.red
-     dispatch('updateScore', {color: 'blue', value: roundScores.blue - roundScores.red})
+     scoreDiff = roundScores.blue - roundScores.red;
    }else{
      console.log( 'Tie: ', 0 );
+     scoreDiff = 0;
    }
-   if( gameIsOver() ){
+
+   if( testForGameOver() ){
+     dispatch('updateScore', {color: roundWinner, value: scoreDiff, gameOver: true})
      handleGameOver();
      return
    }
-
+   
+   dispatch('updateScore', {color: roundWinner, value: scoreDiff, gameOver: false})
    discs[ currentTurnNumber - 1 ].status = 'inactive'
    currentTurnNumber = 0;
-   
-   //TODO - set cue body position to otherside of court if in dev mode?
    
    setTimeout( () => {
      moveOnToNextRound(roundWinner)
@@ -830,8 +806,9 @@
 
  function moveOnToNextRound(previousRoundWinner){
    //TODO - show prompt / arrow to switch sides
-   //currentControl = 'throw';
-   dispatch('changeControls', { controlType: 'throw' });
+   //dispatch('changeControls', { controlType: 'throw' });
+   dispatch('startRound', {});
+   
    //set next player to the winner of previous round
    if( previousRoundWinner != discs[0].userData.discColor ){
      discs.push( discs.shift() );
@@ -947,7 +924,8 @@
    }
  }
 
- function gameIsOver(){
+ function testForGameOver(){
+   console.log(gameScore.red, gameScore.blue, scoreThreshold)
    return gameScore.red > scoreThreshold || gameScore.blue > scoreThreshold
  }
 
@@ -964,7 +942,6 @@
    }
    currentTurnNumber = 0;
    oppositeSideInPlay = false;
-   
  }
 
  function initDevKeyListeners(){
