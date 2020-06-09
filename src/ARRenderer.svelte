@@ -9,6 +9,7 @@
  export let gameScore;
  export let gameScale;
  export let numDiscs;
+ export let numberPlayers;
  
  export let DEV_MODE;
  export let DEBUG_MODE;
@@ -234,6 +235,9 @@
        }else{
          applyForceToThrownDisc([-1, -1])
        }
+       break;
+     case 'switchingPlayers':
+       //Don't allow any interactions when handing over the device to next player
        break;
    }
  }
@@ -759,9 +763,8 @@
    }
  }
 
- function moveOnToNextTurn(){
+ export function moveOnToNextTurn(){
    currentTurnNumber++;
-   //currentControl = 'throw'
    dispatch('changeControls', { controlType: 'throw' });
    startPlayerTurn();
  }
@@ -915,13 +918,28 @@
    if(currentTurnNumber >= discs.length - 1){
      handleRoundOver()
    }else{
-     moveOnToNextTurn();
+     if(DEV_MODE){
+       //webxr extension doesn't support overlay, so you can't have a button to click
+       moveOnToNextTurn();
+     }else if(numberPlayers == 1){
+       promptPlayerTransition();
+     }else{
+       //TODO -- how to handle throw over when 2 players?
+     }
    }
    overlayComponent.setDiscControlDisplayState(false);
  }
 
+ function promptPlayerTransition(){
+   //TODO - lock screen from interactions and from cue colliding, show prompt to hand over device
+   cueShape1.collisionMask = 0;
+   cueShape2.collisionMask = 0;
+
+   let nextPlayer = currentPlayer == 'red' ? 'blue' : 'red';
+   dispatch( 'switchPlayers', {nextPlayer} );
+ }
+
  function testForGameOver(){
-   console.log(gameScore.red, gameScore.blue, scoreThreshold)
    return gameScore.red > scoreThreshold || gameScore.blue > scoreThreshold
  }
 
@@ -941,10 +959,10 @@
  }
 
  function initDevKeyListeners(){
+   //Initializes key listeners used during dev mode, used for moving cue with arrow keys
    let d = .025
    document.addEventListener('keydown', event => {
      reticle.getWorldPosition(cursorPos)
-     //console.log(reticle.matrixWorld.elements)
      switch(event.which){
        case 38:
          //up
@@ -963,7 +981,6 @@
          cursorPos.x += d;
          break;
      }
-     //console.log(reticle.matrixWorld.elements)
      reticle.matrix.setPosition(cursorPos.x, cursorPos.y, cursorPos.z)
    });
  }
@@ -983,8 +1000,9 @@
 
  export function applyForceToThrownDisc([xFactor, yFactor]){
    //xFactor and yFactor are applied relative to the direction of the velocity vector
-   discs[ currentTurnNumber ].userData.body.force[0] = discs[ currentTurnNumber ].userData.body.velocity[0] * xFactor * 2;
-   discs[ currentTurnNumber ].userData.body.force[1] = discs[ currentTurnNumber ].userData.body.velocity[1] * yFactor * 2;
+   let f = (yFactor == 1 && xFactor == 0) ? .75 : 1.5
+   discs[ currentTurnNumber ].userData.body.force[0] = discs[ currentTurnNumber ].userData.body.velocity[0] * xFactor * f;
+   discs[ currentTurnNumber ].userData.body.force[1] = discs[ currentTurnNumber ].userData.body.velocity[1] * yFactor * f;
  }
  
  

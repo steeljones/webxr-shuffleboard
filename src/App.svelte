@@ -19,9 +19,12 @@
 
  let gameScore = { red: 0, blue: 0 };
  window.gameScore = gameScore
+
+ let numberPlayers = 1;
  
  let messageText = '';
  let instructionsText = '';
+ let showContinueButton = false;
 
  //Variables set in dat.gui that then get passed to renderer
  let gameScale = DEV_MODE ? 1 / 2 : 1 / 2;
@@ -115,6 +118,28 @@
    }
  }
 
+ function handleSwitchPlayers({detail}){
+   let { nextPlayer } = detail;
+   if(DEV_MODE){
+     //Just a sanity check to make sure this doesn't get called in dev mode
+     console.error('No switching players in dev mode')
+   }else{
+     currentControl = 'switchingPlayers';
+     instructionsText = nextPlayer + ' player\'s turn';
+     setTimeout( () => {
+       showContinueButton = true;
+     }, 500 );
+   }
+ }
+
+ function handleContinueClick({detail}){
+   if(currentControl == 'switchingPlayers'){
+     instructionsText = '';
+     showContinueButton = false;
+     rendererComponent.moveOnToNextTurn();
+   }
+ }
+
  if(DEV_MODE){
    //Overlay doesn't work on webxr emulator, so expose function on window for development
    window.handleChangeControls = handleChangeControls;
@@ -141,17 +166,18 @@
 <main>
   <div bind:this={overlayContainer} class="overlay-container">
     <Overlay  {sessionActive} {currentControl} {rendererComponent} {gameScore} {messageText} {instructionsText}
-              {gameScale} {numDiscs}
+              {gameScale} {numDiscs} {numberPlayers} {showContinueButton}
               {DEV_MODE} {DEBUG_MODE}
               on:startClick={handleStartClick}
               on:endClick={handleEndClick}              
               on:changeControls={handleChangeControls}
               on:updateValue={handleUpdateValueFromOverlay}
+              on:continueClick={handleContinueClick}
               bind:this={overlayComponent}
     />
   </div>
   <ARRenderer bind:this={rendererComponent} {overlayContainer} {currentControl} {overlayComponent} {gameScore}
-              {gameScale} {numDiscs}
+              {gameScale} {numDiscs} {numberPlayers}
               {DEV_MODE} {DEBUG_MODE}
               on:appLoaded={initApp}
               on:changeControls={handleChangeControls}
@@ -159,6 +185,7 @@
               on:gameOver={handleGameOver}
               on:startGame={handleStartGame}
               on:startRound={handleStartRound}
+              on:switchPlayers={handleSwitchPlayers}
   />
 
 </main>

@@ -7,6 +7,8 @@
  export let gameScore;
  export let gameScale;
  export let numDiscs;
+ export let numberPlayers;
+ export let showContinueButton;
 
  export let DEV_MODE;
  export let DEBUG_MODE;
@@ -22,7 +24,7 @@
  
  let touchStartPoint = {x: 0, y:0};
 
- let displayDiscControls = false;
+ let displayDiscControls = true;
 
  //Score to display -- gets incremented when gameScore changes to animate in points being added
  let displayScore = {red: 0, blue: 0}
@@ -125,6 +127,11 @@
    displayDiscControls = displayState;
  }
 
+ function handleContinueClick(){
+   rendererComponent.lockUIForATick();
+   dispatch('continueClick', {})
+ }
+
 </script>
 
 <div class="overlay" on:click={handleOverlayClick}
@@ -164,6 +171,12 @@
       &#8595;
     </button>
   </div>
+
+  <button class="continue" class:hidden="{!showContinueButton}"
+          on:click="{handleContinueClick}"
+  >
+    Continue
+  </button>
 
   {/if}
   {#if DEBUG_MODE}
@@ -290,6 +303,19 @@
  .inplay-container button.right{
      top: calc(50vh - 30px);
      right: 4vh;
+ }
+
+ button.continue {
+     position: fixed;
+     top: 62vh;
+     left: calc(50vw - 100px);
+     width: 200px;
+     height: 50px;
+     border-radius: 4px;
+     text-transform: uppercase;
+     font-weight: bold;
+     font-size: 28px;
+     line-height: 28px;
  }
 </style>  
 
