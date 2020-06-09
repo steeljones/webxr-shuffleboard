@@ -7,7 +7,7 @@
  export let gameScore;
  export let gameScale;
  export let numDiscs;
- export let numberPlayers;
+ export let numberDevices;
  export let showContinueButton;
 
  export let DEV_MODE;

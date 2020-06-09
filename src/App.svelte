@@ -20,7 +20,7 @@
  let gameScore = { red: 0, blue: 0 };
  window.gameScore = gameScore
 
- let numberPlayers = 1;
+ let numberDevices = 1;
  
  let messageText = '';
  let instructionsText = '';
@@ -166,7 +166,7 @@
 <main>
   <div bind:this={overlayContainer} class="overlay-container">
     <Overlay  {sessionActive} {currentControl} {rendererComponent} {gameScore} {messageText} {instructionsText}
-              {gameScale} {numDiscs} {numberPlayers} {showContinueButton}
+              {gameScale} {numDiscs} {numberDevices} {showContinueButton}
               {DEV_MODE} {DEBUG_MODE}
               on:startClick={handleStartClick}
               on:endClick={handleEndClick}              
@@ -177,7 +177,7 @@
     />
   </div>
   <ARRenderer bind:this={rendererComponent} {overlayContainer} {currentControl} {overlayComponent} {gameScore}
-              {gameScale} {numDiscs} {numberPlayers}
+              {gameScale} {numDiscs} {numberDevices}
               {DEV_MODE} {DEBUG_MODE}
               on:appLoaded={initApp}
               on:changeControls={handleChangeControls}

@@ -9,7 +9,7 @@
  export let gameScore;
  export let gameScale;
  export let numDiscs;
- export let numberPlayers;
+ export let numberDevices;
  
  export let DEV_MODE;
  export let DEBUG_MODE;
@@ -921,7 +921,7 @@
      if(DEV_MODE){
        //webxr extension doesn't support overlay, so you can't have a button to click
        moveOnToNextTurn();
-     }else if(numberPlayers == 1){
+     }else if(numberDevices == 1){
        promptPlayerTransition();
      }else{
        //TODO -- how to handle throw over when 2 players?
