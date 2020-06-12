@@ -89,10 +89,10 @@
  //The line on the court that a disc must cross to be considered in play
  let inPlayLine; //
  //Number of points to win
- let scoreThreshold = 6;
-
+ let scoreThreshold = 21;
  //Variable to control which side of court is in play - 
  let oppositeSideInPlay = false;
+ let planeDetected = false;
  
 
  let lockUI = false;
@@ -123,10 +123,7 @@
    initP2Physics();
    initScene();
    initCourt();
-//addCourtSensors();
-  // initDiscs();
    animate();
-
    dispatch('appLoaded', {});
    
    if(DEBUG_MODE){
@@ -180,8 +177,6 @@
 
    controller = renderer.xr.getController( 0 );
    controller.addEventListener( 'select', handleSelect );
-   controller.addEventListener( 'selectstart', handleSelectStart );
-   controller.addEventListener( 'selectend', handleSelectEnd );
    
    scene.add( controller );
 
@@ -249,14 +244,6 @@
    }
  }
 
- function handleSelectStart(event){
-   
- }
- 
- function handleSelectEnd(){
-   
- }
-
  function initP2Physics(){
    world = new World({
      gravity:[0, 0]
@@ -311,6 +298,11 @@
          if( currentControl == 'court' || currentControl == 'resetCourt'){
            court.visible = true;
            court.matrix.copy( reticle.matrix );
+           
+           if(!planeDetected){
+             dispatch('planeDetectionStateUpdate', {planeDetected: true});
+             planeDetected = true;
+           }
          }
        } else {
 	 reticle.visible = false;
@@ -470,7 +462,7 @@
  }
 
  function setCourt(){
-   dispatch('changeControls', { controlType: 'inactive' });
+   dispatch('courtSet', { });
    court.material.opacity = 1.0;
    courtSet = true;
  }
@@ -733,6 +725,7 @@
  function startPlayerTurn(){
    //TODO: prompt next user in overlay
    currentPlayer = discs[ currentTurnNumber ].userData.discColor;
+   overlayComponent.setCurrentPlayer( currentPlayer );
    if( currentPlayer == 'red'){
      cue.material.color.setHex( 0xff0000 );
    }else{
@@ -776,23 +769,23 @@
  }
 
  function handleRoundOver(){
-   let { sensorOverlaps, roundScores } = getRoundScores()
+   let { sensorOverlaps, roundScore } = getRoundScore()
 
    let roundWinner, scoreDiff;
-   if(roundScores.red > roundScores.blue){
+   if(roundScore.red > roundScore.blue){
      roundWinner = 'red'
-     console.log( 'Red: ', roundScores.red - roundScores.blue)
-     scoreDiff = roundScores.red - roundScores.blue;
-   }else if(roundScores.blue > roundScores.red){
+     console.log( 'Red: ', roundScore.red - roundScore.blue)
+     scoreDiff = roundScore.red - roundScore.blue;
+   }else if(roundScore.blue > roundScore.red){
      roundWinner = 'blue'
-     console.log( 'Blue: ', - roundScores.red + roundScores.blue)
-     scoreDiff = roundScores.blue - roundScores.red;
+     console.log( 'Blue: ', - roundScore.red + roundScore.blue)
+     scoreDiff = roundScore.blue - roundScore.red;
    }else{
      console.log( 'Tie: ', 0 );
      scoreDiff = 0;
    }
 
-   if( testForGameOver() ){
+   if( testForGameOver(roundScore) ){
      dispatch('updateScore', {color: roundWinner, value: scoreDiff, gameOver: true})
      handleGameOver();
      return
@@ -879,8 +872,8 @@
    window.world = world
  }
 
- function getRoundScores(){
-   let roundScores = {red: 0, blue: 0}
+ function getRoundScore(){
+   let roundScore = {red: 0, blue: 0}
    let sensorOverlaps = [];
    let redScore = 0,
        blueScore = 0;
@@ -889,13 +882,13 @@
      let hitTestResult = world.hitTest(d.userData.body.position, scoreAreas);
 
      if(hitTestResult && hitTestResult.length > 0){
-       roundScores[d.userData.discColor] += hitTestResult[0].scoreValue
+       roundScore[d.userData.discColor] += hitTestResult[0].scoreValue
        sensorOverlaps.push({score: hitTestResult[0].scoreValue, color: d.userData.discColor})       
      }
    }
-   roundScores.blue = Math.max(roundScores.blue, 0)
-   roundScores.red = Math.max(roundScores.red, 0)
-   return { sensorOverlaps, roundScores }
+   roundScore.blue = Math.max(roundScore.blue, 0)
+   roundScore.red = Math.max(roundScore.red, 0)
+   return { sensorOverlaps, roundScore }
  }
 
  function testForThrownDisc(){
@@ -905,11 +898,10 @@
  }
 
  function handleThrownDisc(){
-   console.log( 'THROWN');
    discs[currentTurnNumber].status = 'inplay'
    discs[currentTurnNumber].userData.body.allowSleep = true;
    setDiscCollisionMask( discs[ currentTurnNumber ] )
-   overlayComponent.setDiscControlDisplayState(true);
+   dispatch('updateDiscInPlayStatus', {status: true});
  }
 
  function testForThrowOver(){
@@ -933,7 +925,8 @@
        //TODO -- how to handle throw over when 2 players?
      }
    }
-   overlayComponent.setDiscControlDisplayState(false);
+   //overlayComponent.setDiscControlDisplayState(false);
+   dispatch('updateDiscInPlayStatus', {status: false});
  }
 
  function promptPlayerTransition(){
@@ -945,8 +938,8 @@
    dispatch( 'switchPlayers', {nextPlayer} );
  }
 
- function testForGameOver(){
-   return gameScore.red > scoreThreshold || gameScore.blue > scoreThreshold
+ function testForGameOver(roundScore){
+   return (gameScore.red + roundScore.red) > scoreThreshold || (gameScore.blue + roundScore.blue) > scoreThreshold
  }
 
  function handleGameOver(){
@@ -1006,25 +999,22 @@
 
  export function applyForceToThrownDisc([xFactor, yFactor]){
    //xFactor and yFactor are applied relative to the direction of the velocity vector
-   let f = (yFactor == 1 && xFactor == 0) ? .75 : 1.5
+   let f = (yFactor == 1 && xFactor == 0) ? .5 : 1.5
    discs[ currentTurnNumber ].userData.body.force[0] = discs[ currentTurnNumber ].userData.body.velocity[0] * xFactor * f;
    discs[ currentTurnNumber ].userData.body.force[1] = discs[ currentTurnNumber ].userData.body.velocity[1] * yFactor * f;
  }
 
  function resetCourt(){
-   dispatch('revertControls', {});
+   dispatch('resetCourt', {});
    court.material.opacity = 1.0;
    courtSet = true;
    for(let d of discs){
-     d.visible = true;
+     if(d.status != 'inactive'){
+       d.visible = true;
+     }
    }
  }
  
- 
- window.getRoundScores = getRoundScores
- window.handleRoundOver = handleRoundOver;
- window.sdd = setDiscsDamping
- window.hto = handleThrowOver
  
 </script>
 

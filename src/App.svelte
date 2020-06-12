@@ -1,5 +1,3 @@
-
-
 <script>
  import Overlay from './Overlay.svelte';
  import ARRenderer from './ARRenderer.svelte';
@@ -18,23 +16,25 @@
  let currentControl = 'court';
  let lastControl;
 
+ //props passed to overlay for text
+ let overlayTextState = 'clear';
+ let winningPlayer;
+ let discInPlay = false;
+
  let gameScore = { red: 0, blue: 0 };
  window.gameScore = gameScore
 
  let numberDevices = 1;
  
- let messageText = '';
- let instructionsText = '';
  let showContinueButton = false;
 
  //Variables set in dat.gui that then get passed to renderer
- let gameScale = DEV_MODE ? 1 / 2 : 1 / 2;
+ let gameScale = DEV_MODE ? 1 / 2 : 1 / 4;
  let numDiscs = 8;
 
  $:showOverlay = arReady && appReady;
 
  $: {
-   //console.log('Current control changed: ', currentControl)
    window.currentControl = currentControl
  }
  
@@ -51,6 +51,7 @@
  function handleStartClick(){
    sessionActive = true;
    rendererComponent.startSession()
+   overlayTextState = 'movePhone'
  }
 
  function handleEndClick(){
@@ -65,12 +66,6 @@
      lastControl = currentControl;
      currentControl = controlType;
    }
-   console.log('control: ', controlType)
- }
-
- function handleRevertControls(detail = {}){
-   currentControl = lastControl;
-   console.log('revert control: ', controlType)
  }
 
  function handleUpdateScore({detail}){
@@ -81,20 +76,20 @@
      gameScore[color] += value;     
    }
    if(!gameOver){
-     messageText = 'Round Over'
-     instructionsText = 'Move to other end of court';
+     overlayTextState = 'roundOver'
    }
  }
 
  function handleGameOver({detail}){
    let { winner } = detail;
-   messageText = 'WINNER: ' + winner.toUpperCase();
+   winningPlayer = winner;
+   overlayTextState = 'gameOver';
    console.log('GAME WON: ', winner);
    setTimeout( enableTapToPlayAgain, 4000 );
  }
 
  function enableTapToPlayAgain(){
-   instructionsText = 'Tap to play again';
+   overlayTextState = 'tapToPlayAgain'
    currentControl = 'inactive';
  }
 
@@ -102,13 +97,11 @@
    gameScore.red = 0;
    gameScore.blue = 0;
    currentControl = 'throw';
-   messageText = '';
-   instructionsText = '';
+   overlayTextState = 'clear'
  }
 
  function handleStartRound(){
-   messageText = '';
-   instructionsText = '';
+   overlayTextState = 'clear'
    currentControl = 'throw'
  }
 
@@ -128,7 +121,7 @@
      console.error('No switching players in dev mode')
    }else{
      currentControl = 'switchingPlayers';
-     instructionsText = nextPlayer + ' player\'s turn';
+     overlayTextState = 'switchPlayers'
      setTimeout( () => {
        showContinueButton = true;
      }, 500 );
@@ -137,11 +130,36 @@
 
  function handleContinueClick({detail}){
    if(currentControl == 'switchingPlayers'){
-     instructionsText = '';
+     overlayTextState = 'clear';
      showContinueButton = false;
      rendererComponent.moveOnToNextTurn();
    }
  }
+
+ function handleDiscInPlayStatus({detail}){
+   let { status } = detail;
+   discInPlay = status;
+ }
+
+ function handlePlaneDetectionStateUpdate({detail}){
+   let { planeDetected } = detail;
+   
+   if(planeDetected){
+     overlayTextState = 'setCourt';
+   }else{
+     
+   }
+ }
+
+ function handleCourtSet(){
+   currentControl = 'inactive';
+   overlayTextState = 'tapToStart'
+ }
+
+ function handleResetCourt(){
+   currentControl = lastControl;
+ }
+
 
  if(DEV_MODE){
    //Overlay doesn't work on webxr emulator, so expose function on window for development
@@ -168,8 +186,9 @@
 
 <main>
   <div bind:this={overlayContainer} class="overlay-container">
-    <Overlay  {sessionActive} {currentControl} {rendererComponent} {gameScore} {messageText} {instructionsText}
-              {gameScale} {numDiscs} {numberDevices} {showContinueButton}
+    <Overlay  {sessionActive} {currentControl} {rendererComponent} {gameScore} {winningPlayer}
+              {gameScale} {numDiscs} {numberDevices} {showContinueButton} textState={overlayTextState}
+              {discInPlay}
               {DEV_MODE} {DEBUG_MODE}
               on:startClick={handleStartClick}
               on:endClick={handleEndClick}              
@@ -180,7 +199,7 @@
     />
   </div>
   <ARRenderer bind:this={rendererComponent} {overlayContainer} {currentControl} {overlayComponent} {gameScore}
-              {gameScale} {numDiscs} {numberDevices}
+              {gameScale} {numDiscs} {numberDevices} 
               {DEV_MODE} {DEBUG_MODE}
               on:appLoaded={initApp}
               on:changeControls={handleChangeControls}
@@ -189,7 +208,10 @@
               on:startGame={handleStartGame}
               on:startRound={handleStartRound}
               on:switchPlayers={handleSwitchPlayers}
-              on:revertControls={handleRevertControls}
+              on:resetCourt={handleResetCourt}
+              on:updateDiscInPlayStatus={handleDiscInPlayStatus}
+              on:planeDetectionStateUpdate={handlePlaneDetectionStateUpdate}
+              on:courtSet={handleCourtSet}
   />
 
 </main>

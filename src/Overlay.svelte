@@ -2,13 +2,14 @@
  export let sessionActive;
  export let currentControl;
  export let rendererComponent;
- export let messageText;
- export let instructionsText;
+ export let textState;
+ export let winningPlayer;
  export let gameScore;
  export let gameScale;
  export let numDiscs;
  export let numberDevices;
  export let showContinueButton;
+ export let discInPlay;
 
  export let DEV_MODE;
  export let DEBUG_MODE;
@@ -24,8 +25,11 @@
  
  let touchStartPoint = {x: 0, y:0};
 
- let displayDiscControls = false;
- let controlsOpen = false;
+  let controlsOpen = false;
+
+ let currentPlayer;
+ let messageText;
+ let instructionsText;
 
  //Score to display -- gets incremented when gameScore changes to animate in points being added
  let displayScore = {red: 0, blue: 0}
@@ -33,6 +37,17 @@
  let debugCanvas,
      debugContainer,
      gui;
+
+ let displayText = {
+   roundOver: { message: 'Round Over', instructions: 'Move to other end of court'},
+   tapToPlayAgain: { instructions: 'Tap to play again'},
+   clear: {message: '', instructions: ''},
+   switchPlayers: {message: '', instructions: () => `${currentPlayer == 'red' ? 'blue' : 'red'} player's turn`},
+   gameOver: {message: () => `WINNER: ${winningPlayer.toUpperCase()}`},
+   setCourt: {message: '', instructions: 'Tap to place court'},
+   tapToStart: {message: '', instructions: 'Tap to start game'},
+   movePhone: {message: '', instructions: 'Move phone slowly until court appears'}
+ }
 
  if(DEBUG_MODE){
    initDatGui();
@@ -44,15 +59,24 @@
    if(displayScore.red < gameScore.red){
      setTimeout(() => {
        displayScore.red++;
-     }, 50)
+     }, 20)
    }else if(displayScore.blue < gameScore.blue){
      setTimeout(() => {
        displayScore.blue++;
-     }, 50)
+     }, 20)
+   }else if(gameScore.red == 0 && gameScore.blue == 0){
+     displayScore.red = gameScore.red;
+     displayScore.blue = gameScore.blue;
    }
  }
- 
- function handleARButtonClick(){
+
+ $: {
+   //Update the message text and instructions text based on the textState prop
+   let textToDisplay = displayText[textState];
+   updateDisplayText(textToDisplay);
+ }
+
+  function handleARButtonClick(){
    if(!sessionActive){
      dispatch('startClick', {});
    }else{
@@ -124,10 +148,6 @@
    rendererComponent.lockUIForATick();
  }
 
- export function setDiscControlDisplayState(displayState){
-   displayDiscControls = displayState;
- }
-
  function handleContinueClick(){
    rendererComponent.lockUIForATick();
    dispatch('continueClick', {})
@@ -136,6 +156,32 @@
  function toggleControls(){
    rendererComponent.lockUIForATick();
    controlsOpen = !controlsOpen;
+ }
+
+ export function setCurrentPlayer(player){
+   currentPlayer = player;
+ }
+
+ function updateDisplayText(textToDisplay){
+   if(textToDisplay.message){
+     if(typeof textToDisplay.message == 'function' ){
+       messageText = textToDisplay.message();
+     }else {
+       messageText = textToDisplay.message;
+     }
+   }else if(textToDisplay.message !== undefined){
+     messageText = ''
+   }
+
+   if(textToDisplay.instructions){
+     if(typeof textToDisplay.instructions == 'function' ){
+       instructionsText = textToDisplay.instructions();
+     }else{
+       instructionsText = textToDisplay.instructions;
+     }
+   }else if(textToDisplay.instructions !== undefined){
+     instructionsText = '';
+   }
  }
 
 
@@ -164,16 +210,16 @@
     { instructionsText }
   </div>
 
-  <div class="inplay-container" class:hidden={!displayDiscControls}>
+  <div class="inplay-container" class:hidden={!discInPlay}>
     <button class="up" on:click="{handleApplyForceClick.bind(this, [0, 1])}">
       &#8593;
     </button>
-    <button class="left" on:click="{handleApplyForceClick.bind(this, [-1, 0])}">
+    <!--button class="left" on:click="{handleApplyForceClick.bind(this, [-1, 0])}">
       &#8592;
     </button>
     <button class="right" on:click="{handleApplyForceClick.bind(this, [1, 0])}">
       &#8594;
-    </button>
+    </button-->
     <button class="down" on:click="{handleApplyForceClick.bind(this, [0, -1])}">
       &#8595;
     </button>
