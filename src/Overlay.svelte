@@ -24,7 +24,8 @@
  
  let touchStartPoint = {x: 0, y:0};
 
- let displayDiscControls = true;
+ let displayDiscControls = false;
+ let controlsOpen = false;
 
  //Score to display -- gets incremented when gameScore changes to animate in points being added
  let displayScore = {red: 0, blue: 0}
@@ -98,7 +99,7 @@
    gui = new dat.GUI({autoPlace: false});
    let values = {gameScale, numDiscs};
    let scaleController = gui.add(values, 'gameScale', .1, 1.0);
-   let numDiscsController = gui.add(values, 'numDiscs', 2, 32, 1);
+   let numDiscsController = gui.add(values, 'numDiscs', 2, 32, 2);
    //scaleController.onChange(handleValueChange)
    scaleController.onFinishChange(handleValueChange)
    numDiscsController.onFinishChange(handleValueChange)
@@ -132,7 +133,13 @@
    dispatch('continueClick', {})
  }
 
-</script>
+ function toggleControls(){
+   rendererComponent.lockUIForATick();
+   controlsOpen = !controlsOpen;
+ }
+
+
+ </script>
 
 <div class="overlay" on:click={handleOverlayClick}
      on:touchstart|self={handleOverlayTouchStart}
@@ -141,7 +148,7 @@
      
 >
   {#if sessionActive}
-  <div class="{DEBUG_MODE ? 'debug score' : 'score'}">
+  <div class="score" class:debug="{DEBUG_MODE}">
     <div>
       Red: {displayScore.red}
     </div>
@@ -170,6 +177,19 @@
     <button class="down" on:click="{handleApplyForceClick.bind(this, [0, -1])}">
       &#8595;
     </button>
+  </div>
+
+  <div class="controls-container">
+    <button class="open" on:click="{toggleControls}">^</button>
+    <div class="controls" class:hidden="{!controlsOpen}">
+      <button on:click="{changeControls.bind(this, 'resetCourt')}" class="reset-court">
+        <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="map-pin" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 288 512" class="svg-inline--fa fa-map-pin fa-w-9 fa-3x"><path fill="currentColor" d="M112 316.94v156.69l22.02 33.02c4.75 7.12 15.22 7.12 19.97 0L176 473.63V316.94c-10.39 1.92-21.06 3.06-32 3.06s-21.61-1.14-32-3.06zM144 0C64.47 0 0 64.47 0 144s64.47 144 144 144 144-64.47 144-144S223.53 0 144 0zm0 76c-37.5 0-68 30.5-68 68 0 6.62-5.38 12-12 12s-12-5.38-12-12c0-50.73 41.28-92 92-92 6.62 0 12 5.38 12 12s-5.38 12-12 12z" class=""></path></svg>
+      </button>
+
+      <button on:click="{changeControls.bind(this, 'changeScale')}" class="change-scale">
+        <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="expand" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" class="svg-inline--fa fa-expand fa-w-14 fa-2x"><path fill="currentColor" d="M0 180V56c0-13.3 10.7-24 24-24h124c6.6 0 12 5.4 12 12v40c0 6.6-5.4 12-12 12H64v84c0 6.6-5.4 12-12 12H12c-6.6 0-12-5.4-12-12zM288 44v40c0 6.6 5.4 12 12 12h84v84c0 6.6 5.4 12 12 12h40c6.6 0 12-5.4 12-12V56c0-13.3-10.7-24-24-24H300c-6.6 0-12 5.4-12 12zm148 276h-40c-6.6 0-12 5.4-12 12v84h-84c-6.6 0-12 5.4-12 12v40c0 6.6 5.4 12 12 12h124c13.3 0 24-10.7 24-24V332c0-6.6-5.4-12-12-12zM160 468v-40c0-6.6-5.4-12-12-12H64v-84c0-6.6-5.4-12-12-12H12c-6.6 0-12 5.4-12 12v124c0 13.3 10.7 24 24 24h124c6.6 0 12-5.4 12-12z" class=""></path></svg>
+      </button>
+    </div>
   </div>
 
   <button class="continue" class:hidden="{!showContinueButton}"
@@ -316,6 +336,30 @@
      font-weight: bold;
      font-size: 28px;
      line-height: 28px;
+ }
+ .controls-container {
+     position: fixed;
+     left: 20px;
+     bottom: 20px;
+     display: flex;
+     flex-wrap: wrap-reverse;
+     flex-direction: column-reverse;
+ }
+ .controls-container button.open{
+
+ }
+ .controls-container button {
+     margin: 10px auto;
+     width: 40px;
+     height: 40px;
+ }
+ .controls-container button svg{
+     width: 25px;
+     height: 25px;
+ }
+ .controls {
+     display: flex;
+     flex-direction: column;
  }
 </style>  
 

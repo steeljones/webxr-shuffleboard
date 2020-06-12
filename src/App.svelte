@@ -16,6 +16,7 @@
 
  let controls = ['court', 'throw']
  let currentControl = 'court';
+ let lastControl;
 
  let gameScore = { red: 0, blue: 0 };
  window.gameScore = gameScore
@@ -61,13 +62,15 @@
    let {controlType} = detail;
 
    if(controlType){
+     lastControl = currentControl;
      currentControl = controlType;
-   }else{
-     //Move to next control in the list
-     let currentIdx = controls.indexOf(currentControl);
-     currentControl = controls[++currentIdx % controls.length];
    }
    console.log('control: ', controlType)
+ }
+
+ function handleRevertControls(detail = {}){
+   currentControl = lastControl;
+   console.log('revert control: ', controlType)
  }
 
  function handleUpdateScore({detail}){
@@ -186,6 +189,7 @@
               on:startGame={handleStartGame}
               on:startRound={handleStartRound}
               on:switchPlayers={handleSwitchPlayers}
+              on:revertControls={handleRevertControls}
   />
 
 </main>

@@ -1,7 +1,3 @@
-<svelte:head>
-  <!--script async src="/lib/ammo.js" on:load={onAmmoLoaded}></script-->
-</svelte:head>
-
 <script>
  export let overlayComponent;
  export let overlayContainer;
@@ -110,7 +106,15 @@
    //gameScale watcher
    gameScale = gameScale;
    handleGameScaleChange();
+ }
 
+ $:{
+   if(currentControl == 'resetCourt'){
+     courtSet = false;
+     for(let d of discs){
+       d.visible = false;
+     }
+   }
  }
 
  init();
@@ -239,6 +243,9 @@
      case 'switchingPlayers':
        //Don't allow any interactions when handing over the device to next player
        break;
+     case 'resetCourt':
+       resetCourt();
+       break;
    }
  }
 
@@ -301,8 +308,7 @@
 	   reticle.matrix.fromArray( hit.getPose( referenceSpace ).transform.matrix );
          }
 
-         if( currentControl == 'court'){
-           //court.matrix.fromArray( hit.getPose( referenceSpace ).transform.matrix );
+         if( currentControl == 'court' || currentControl == 'resetCourt'){
            court.visible = true;
            court.matrix.copy( reticle.matrix );
          }
@@ -1003,6 +1009,15 @@
    let f = (yFactor == 1 && xFactor == 0) ? .75 : 1.5
    discs[ currentTurnNumber ].userData.body.force[0] = discs[ currentTurnNumber ].userData.body.velocity[0] * xFactor * f;
    discs[ currentTurnNumber ].userData.body.force[1] = discs[ currentTurnNumber ].userData.body.velocity[1] * yFactor * f;
+ }
+
+ function resetCourt(){
+   dispatch('revertControls', {});
+   court.material.opacity = 1.0;
+   courtSet = true;
+   for(let d of discs){
+     d.visible = true;
+   }
  }
  
  
