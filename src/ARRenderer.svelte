@@ -962,21 +962,26 @@
    let d = .025
    document.addEventListener('keydown', event => {
      reticle.getWorldPosition(cursorPos)
+     let f = 20;
      switch(event.which){
        case 38:
          //up
+         if(event.shiftKey) applyForceToThrownDisc([0, -1])
          cursorPos.z -= d
          break;
        case 40:
          //down
+         if(event.shiftKey) applyForceToThrownDisc([0, 1])
          cursorPos.z += d
          break;
        case 37:
          //left
+         if(event.shiftKey) applyForceToThrownDisc([-1, 0])
          cursorPos.x -= d;
          break;
        case 39:
          //right
+         if(event.shiftKey) applyForceToThrownDisc([1, 0])
          cursorPos.x += d;
          break;
      }
@@ -998,10 +1003,16 @@
  }
 
  export function applyForceToThrownDisc([xFactor, yFactor]){
-   //xFactor and yFactor are applied relative to the direction of the velocity vector
-   let f = (yFactor == 1 && xFactor == 0) ? .5 : 1.5
-   discs[ currentTurnNumber ].userData.body.force[0] = discs[ currentTurnNumber ].userData.body.velocity[0] * xFactor * f;
-   discs[ currentTurnNumber ].userData.body.force[1] = discs[ currentTurnNumber ].userData.body.velocity[1] * yFactor * f;
+   let f = (yFactor == 1 && xFactor == 0) ? .01 : .03
+
+   if( oppositeSideInPlay ){
+     discs[ currentTurnNumber ].userData.body.force[0] = xFactor * f * -1;
+     discs[ currentTurnNumber ].userData.body.force[1] = yFactor * f;
+   }else{
+     discs[ currentTurnNumber ].userData.body.force[0] = xFactor * f;
+     discs[ currentTurnNumber ].userData.body.force[1] = yFactor * f * -1;
+   }
+
  }
 
  function resetCourt(){

@@ -214,12 +214,12 @@
     <button class="up" on:click="{handleApplyForceClick.bind(this, [0, 1])}">
       &#8593;
     </button>
-    <!--button class="left" on:click="{handleApplyForceClick.bind(this, [-1, 0])}">
+    <button class="left" on:click="{handleApplyForceClick.bind(this, [-1, 0])}">
       &#8592;
     </button>
     <button class="right" on:click="{handleApplyForceClick.bind(this, [1, 0])}">
       &#8594;
-    </button-->
+    </button>
     <button class="down" on:click="{handleApplyForceClick.bind(this, [0, -1])}">
       &#8595;
     </button>
