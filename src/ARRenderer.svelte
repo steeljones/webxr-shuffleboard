@@ -13,10 +13,17 @@
  import * as THREE from 'three';
  import { Body, World, Circle, Plane, Box, Convex, DistanceConstraint, PrismaticConstraint, ContactMaterial, Material, vec2 } from "p2";
  import Stats from 'stats-js';
+ import axios from 'axios';
  import { createEventDispatcher, tick } from 'svelte';
 
  import scoringAreas from './scoringAreas';
  const dispatch = createEventDispatcher();
+
+ const serverURL = window.location.protocol == 'http'
+                 ? window.location.origin.replace(window.location.port, 3000)
+                 : 'https://' + window.location.hostname + ':3001';
+ const serverSaveURL = serverURL + '/saveGame'
+ const serverLoadURL = serverURL + '/game'
 
  //Variables for app created three / p2 objects
  let canvas, camera, scene, renderer,
@@ -209,7 +216,7 @@
 
  function handleSelect(event) {
    if(lockUI) return
-   
+
    switch ( currentControl ){
      case 'court':
        if ( reticle.visible) {
@@ -723,7 +730,6 @@
  }
 
  function startPlayerTurn(){
-   //TODO: prompt next user in overlay
    currentPlayer = discs[ currentTurnNumber ].userData.discColor;
    overlayComponent.setCurrentPlayer( currentPlayer );
    if( currentPlayer == 'red'){
@@ -1025,6 +1031,91 @@
      }
    }
  }
+
+ export function saveGame(){
+   if(!courtSet){
+     console.log('Can\'t save game if court is not set')
+     return
+   }
+   let data = {
+     gameScore,
+     gameScale,
+     discPositions: discs.map(d => d.userData.body.position),
+     currentPlayer,
+     currentTurnNumber,
+     oppositeSideInPlay
+   };
+
+   axios.post(serverSaveURL, {data})
+        .then(response => {
+          console.log('saved: ', response.data);
+        }).catch(error => {
+          console.log('Error saving game: ', error)
+        });
+ }
+
+ export function loadGame(){
+   if(!courtSet){
+     console.log('Can\'t load game if court is not set')
+     return
+   }
+   axios.get(serverLoadURL)
+        .then(response => {
+          syncGame(response.data);
+          console.log('loaded')
+        }).catch( error => {
+          console.log('Error loading game: ', error)
+        });
+ }
+
+ function syncGame(gameData){
+   dispatch('changeControls', { controlType: 'throw' });
+   currentPlayer = gameData.currentPlayer;
+   currentTurnNumber = gameData.currentTurnNumber;
+   oppositeSideInPlay = gameData.oppositeSideInPlay;
+   let discPositions = gameData.discPositions;
+
+   if( currentPlayer != discs[currentTurnNumber].userData.discColor ){
+     discs.push( discs.shift() );
+   }
+
+   for(let i = 0; i < discs.length; i++){
+     let d = discs[ i ];
+     d.userData.body.velocity[0] = 0;
+     d.userData.body.velocity[1] = 0;
+     if(i < currentTurnNumber){
+       d.userData.body.position = discPositions[i];
+       d.userData.body.wakeUp();
+       d.userData.body.allowSleep = true;
+       d.visible = true;
+       d.status = 'inplay';
+     }else if(i == currentTurnNumber){
+       d.status = 'oncue';
+       d.visible = true;
+       d.userData.body.position = discPositions[i];
+     }else{
+       d.visible = false;
+       d.status = 'inactive';
+       d.userData.body.position[0] = 0;
+       if(oppositeSideInPlay){
+         d.userData.body.position[1] = courtLength / 2 * .8 * -1;
+       }else{
+         d.userData.body.position[1] = courtLength / 2 * .8;
+       }
+       d.userData.body.velocity[0] = 0;
+       d.userData.body.velocity[1] = 0;
+       d.userData.body.allowSleep = true;
+       d.userData.body.sleep();
+     }
+     setDiscCollisionMask( d );
+   }
+   dispatch('setScore', {red: gameData.gameScore.red, blue: gameData.gameScore.blue});
+   startPlayerTurn();
+   //TODO - set game scale
+ }
+
+ window.saveGame = saveGame;
+ window.loadGame = loadGame;
  
  
 </script>

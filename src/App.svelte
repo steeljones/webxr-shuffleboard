@@ -98,6 +98,7 @@
    gameScore.blue = 0;
    currentControl = 'throw';
    overlayTextState = 'clear'
+   overlayComponent.reset();
  }
 
  function handleStartRound(){
@@ -160,6 +161,12 @@
    currentControl = lastControl;
  }
 
+ function handleSetScore({detail}){
+   let { red, blue } = detail;
+   gameScore.red = red;
+   gameScore.blue = blue;
+ }
+
 
  if(DEV_MODE){
    //Overlay doesn't work on webxr emulator, so expose function on window for development
@@ -212,6 +219,7 @@
               on:updateDiscInPlayStatus={handleDiscInPlayStatus}
               on:planeDetectionStateUpdate={handlePlaneDetectionStateUpdate}
               on:courtSet={handleCourtSet}
+              on:setScore={handleSetScore}
   />
 
 </main>
