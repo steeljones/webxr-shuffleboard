@@ -3,8 +3,9 @@ import { Body, World, Circle, Box, ContactMaterial, Material, vec2 } from "p2";
 import { SCORINGAREAS, BOUNDS, REDCUE, BLUECUE, REDDISCS, BLUEDISCS } from './collisionConstants';
 
 export default class {
-  constructor(geometry, color, radius, mass, damping, p2Material){
+  constructor(geometry, height, color, radius, mass, damping, p2Material){
     this.radius = radius;
+    this.height = height;
     this.material = new THREE.MeshBasicMaterial( );
     this.mesh = new THREE.Mesh( geometry, this.material );
     this.mesh.visible = false;
@@ -106,7 +107,7 @@ export default class {
     this.setCollisionMask();
   }
 
-  nudge([xFactor, yFactor]){
+  nudge([xFactor, yFactor], oppositeSideInPlay){
     let f = (yFactor == 1 && xFactor == 0) ? .01 : .03
 
     if( oppositeSideInPlay ){
@@ -141,5 +142,14 @@ export default class {
     this.body.interpolatedPosition[0] = data.position[0];
     this.body.interpolatedPosition[1] = data.position[1];
     this.mesh.visible = data.visible;
+  }
+
+  updateGraphics(courtMatrix){
+    this.mesh.position.set(
+      this.body.interpolatedPosition[0],
+      this.height,
+      this.body.interpolatedPosition[1]
+    )
+    this.mesh.applyMatrix4( courtMatrix );
   }
 }

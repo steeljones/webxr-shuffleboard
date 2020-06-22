@@ -331,14 +331,8 @@
  }
 
  function updateDiscGraphics(){
-
    for( let disc of discs ){
-     disc.mesh.position.set(
-       disc.body.interpolatedPosition[0],
-       discHeight,
-       disc.body.interpolatedPosition[1]
-     )
-     disc.mesh.applyMatrix4( court.mesh.matrix );
+     disc.updateGraphics(court.mesh.matrix);
    }
  }
 
@@ -388,7 +382,7 @@
    
    for(let i = 0; i < numDiscs; i++) {
      let color = i % 2 ? 'red' : 'blue'
-     let disc = new Disc(discGeometry, color, discRadius, discMass, discDamping, p2Material);
+     let disc = new Disc(discGeometry, discHeight, color, discRadius, discMass, discDamping, p2Material);
      scene.add(disc.mesh);
      world.addBody( disc.body )
      discs.push( disc );
@@ -466,7 +460,7 @@
    cue.setCollisions(currentPlayer);
 
    if(currentTurnNumber > 0){
-     discs[currentTurnNumber - 1].status = 'inplay';
+     //discs[currentTurnNumber - 1].status = 'inplay';
      discs[currentTurnNumber - 1].setCollisionMask();
    }
    discs[ currentTurnNumber ].startTurn();
@@ -651,7 +645,7 @@
  }
 
  export function applyForceToThrownDisc([xFactor, yFactor]){
-   discs[ currentTurnNumber ].nudge([xFactor, yFactor]);
+   discs[ currentTurnNumber ].nudge([xFactor, yFactor], oppositeSideInPlay);
  }
 
  function resetCourt(){
