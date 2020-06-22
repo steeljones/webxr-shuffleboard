@@ -1,6 +1,8 @@
 <script>
+ import { onMount } from 'svelte';
  import Overlay from './Overlay.svelte';
  import ARRenderer from './ARRenderer.svelte';
+ import io from 'socket.io-client';
 
  let DEV_MODE = window.location.search.includes( 'dev' );
  let DEBUG_MODE = window.location.search.includes( 'debug' );
@@ -25,12 +27,18 @@
  window.gameScore = gameScore
 
  let numberDevices = 1;
+ let devicePlayerColor = 'red';
  
  let showContinueButton = false;
 
  //Variables set in dat.gui that then get passed to renderer
  let gameScale = DEV_MODE ? 1 / 2 : 1 / 4;
  let numDiscs = 8;
+ let currentGameId;
+
+ let socket;
+
+ onMount( connectWS );
 
  $:showOverlay = arReady && appReady;
 
@@ -167,6 +175,83 @@
    gameScore.blue = blue;
  }
 
+ function connectWS(){
+   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+   //const io = new WebSocket(`${protocol}//${window.location.hostname}:${protocol == wss ? 3001 : 3000}`);
+   let wsUrl = `http://${window.location.hostname}:${protocol == 'wss' ? 3001 : 3000}`
+   socket = io.connect(wsUrl);
+
+   socket.on('connect', handleWSOpen);
+   socket.on('joined-game', handleJoinedGame);
+   socket.on('new-player', handleNewPlayer);
+   socket.on('update-game', handleUpdateGame)
+   socket.on('update-world', handleUpdateWorld)
+ }
+
+ function handleWSOpen(){
+   console.log('connected to ws')
+   let hash = window.location.hash;
+   if(hash){
+     let [ gameId, devicePlayerColor ] = hash.replace('#', '').split(',');
+     socket.emit('join-game', {gameId, playerColor: devicePlayerColor});
+   }else{
+     console.log('new game')
+     socket.emit('new-game', hash.replace('#', ''));
+   }
+ }
+
+ function handleWSError(){
+   console.log('WS error: ', err)
+ }
+
+ function handleJoinedGame( message ){
+   let { gameId, playerColor } = message;
+   let hash = '#' + gameId + ',' + playerColor;
+   window.location.hash = hash;
+   currentGameId = gameId;
+   console.log('joined ' + gameId + ' as player ' + playerColor)
+   if(playerColor == 'blue'){
+     switchToMultiDevice('blue');
+   }
+ }
+
+ function handleNewPlayer(){
+   //This only gets called for player1
+   switchToMultiDevice('red');
+ }
+
+ function switchToMultiDevice(_devicePlayerColor){
+   numberDevices = 2;
+   devicePlayerColor = _devicePlayerColor;
+   console.log('running in 2 device mode');
+ }
+
+ function updateOtherDeviceWorld({discs, cue}){
+   socket.emit('update-world', {
+     gameId: currentGameId,
+     discs: discs.map(d => {
+       return {
+         position: d.userData.body.position,
+         visible: d.visible
+       }
+     }),
+     cue: cue.userData.body.position,
+     playerColor: devicePlayerColor,
+   })
+ }
+
+ function updateOtherDeviceGame(){
+   console.log('update game state')
+ }
+
+ function handleUpdateGame(){
+   //TODO
+ }
+
+ function handleUpdateWorld( data ){
+   rendererComponent.updateGameFromData( data );
+ }
+
 
  if(DEV_MODE){
    //Overlay doesn't work on webxr emulator, so expose function on window for development
@@ -206,7 +291,7 @@
     />
   </div>
   <ARRenderer bind:this={rendererComponent} {overlayContainer} {currentControl} {overlayComponent} {gameScore}
-              {gameScale} {numDiscs} {numberDevices} 
+              {gameScale} {numDiscs} {numberDevices} {devicePlayerColor} {updateOtherDeviceWorld} {updateOtherDeviceGame}
               {DEV_MODE} {DEBUG_MODE}
               on:appLoaded={initApp}
               on:changeControls={handleChangeControls}

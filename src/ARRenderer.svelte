@@ -6,15 +6,18 @@
  export let gameScale;
  export let numDiscs;
  export let numberDevices;
+ export let devicePlayerColor;
  
  export let DEV_MODE;
  export let DEBUG_MODE;
   
  import * as THREE from 'three';
- import { Body, World, Circle, Plane, Box, Convex, DistanceConstraint, PrismaticConstraint, ContactMaterial, Material, vec2 } from "p2";
+ import { Body, World, Circle, Plane, Box, Convex, ContactMaterial, Material, vec2 } from "p2";
  import Stats from 'stats-js';
  import axios from 'axios';
  import { createEventDispatcher, tick } from 'svelte';
+ import Cue from './Cue'
+ import { SCORINGAREAS, BOUNDS, REDCUE, BLUECUE, REDDISCS, BLUEDISCS } from './collisionConstants';
 
  import scoringAreas from './scoringAreas';
  const dispatch = createEventDispatcher();
@@ -29,21 +32,12 @@
  let canvas, camera, scene, renderer,
      controller,
      reticle,
-     cursor = new THREE.Vector3(),
-     cursorMat = new THREE.Matrix4(),
-     cursorPos = new THREE.Vector3(),
-     cursorQuat = new THREE.Quaternion(),
-     cursorScale = new THREE.Vector3(1, 1, 1),
-     cursorEuler = new THREE.Euler(),
      raycaster,
      screenCenter = new THREE.Vector2(),
      mouse = new THREE.Vector2(),
      anchor,
      court,
      discs = [],
-     cueShape1,
-     cueShape2,
-     cueBody,
      cue,
      showCue = false,
      reticleNullBody,
@@ -79,14 +73,6 @@
  let discRestitution = 0.5;
  let discDamping = 0.4
   
- //Collison Masks
- let SCORINGAREAS = Math.pow(2, 0);
- let BOUNDS = Math.pow(2, 1);
- let REDCUE = Math.pow( 2, 2);
- let BLUECUE = Math.pow( 2, 3);
- let REDDISCS = Math.pow( 2, 4);
- let BLUEDISCS = Math.pow( 2, 5);
-
 
  //Game state / game scoring variables
  let currentPlayer = 'open';
@@ -101,7 +87,6 @@
  let oppositeSideInPlay = false;
  let planeDetected = false;
  
-
  let lockUI = false;
 
   //Debug info/stats
@@ -130,7 +115,7 @@
    initP2Physics();
    initScene();
    initCourt();
-   animate();
+   renderer.setAnimationLoop( render );
    dispatch('appLoaded', {});
    
    if(DEBUG_MODE){
@@ -226,7 +211,6 @@
          addBounds();
          setDiscs();
          initCue();
-         setCueCollisions();
          reticle.material.opacity = .1;
        }
        break;
@@ -258,10 +242,6 @@
 
    world.sleepMode = World.BODY_SLEEPING;
    world.defaultContactMaterial.friction = .01;
- }
-
- function animate() {
-   renderer.setAnimationLoop( render );
  }
 
  function render( timestamp, frame ) {
@@ -297,7 +277,7 @@
          reticle.visible = true;
          
          if(DEV_MODE && currentControl != 'court'){
-           
+           //Control reticle manually in dev mode here
          }else{
 	   reticle.matrix.fromArray( hit.getPose( referenceSpace ).transform.matrix );
          }
@@ -318,28 +298,26 @@
          }
        }
      }
-
-     /*
-     if( DEBUG_MODE ){
-       let pose = frame.getViewerPose(referenceSpace);
-       if( pose ){
-         let { x, y, z } = pose.views[0].transform.position;
-         debugInfo.viewer = [ x.toFixed(2), y.toFixed(2), z.toFixed(2) ];
-       }
-
-       if( Math.random() > 0.8){
-         reticle.matrixWorld.decompose( cursorPos, cursorQuat, cursorScale )
-         debugInfo['reticle'] = cursorPos.toArray().map( p => p.toFixed(2) );
-       }
-       //overlayComponent.renderDebug( debugInfo );
-     }
-     */
-
    }
 
    let dt = clock.getDelta();
    if(courtSet){
-     updatePhysics(dt);
+     if(numberDevices == 2 && devicePlayerColor == currentPlayer){
+       updatePhysics(dt);
+       updateOtherDeviceWorld( {discs, cue:cue.cueGraphics});
+     }else if(numberDevices == 1){
+       updatePhysics(dt);
+     }
+     updateDiscGraphics();
+
+     //Tests for changes in game states based on disc thrown or passing in play line
+     if( currentControl == 'throw' ){
+       if( discs[ currentTurnNumber ].status == 'oncue' ){
+         testForThrownDisc();
+       }else if( discs[ currentTurnNumber ].status == 'inplay' ){
+         testForThrowOver();
+       }
+     }
    }
 
    renderer.render( scene, camera );
@@ -351,6 +329,14 @@
 
  function updatePhysics(delta){
    world.step( fixedTimeStep, delta, maxSubSteps );
+
+   if(showCue){
+     cue.update(court.matrixWorld, oppositeSideInPlay);
+   }
+ }
+
+ function updateDiscGraphics(){
+
    for( let disc of discs ){
      disc.position.set(
        disc.userData.body.interpolatedPosition[0],
@@ -359,68 +345,12 @@
      )
      disc.applyMatrix4( court.matrix );
    }
-
-   if(showCue){
-     updateCue();
-   }
- }
-
- function updateCue(){
-   //Update cue position and angle based on the reticle position and angle
-   
-   //Get previous cue physics body position and angle and use it to update graphics
-   cursorPos.set( cue.userData.body.interpolatedPosition[0], discHeight, cue.userData.body.interpolatedPosition[1] );
-   cursorScale.set(1, 1, 1);
-   cursorQuat.setFromAxisAngle( new THREE.Vector3( 0, -1, 0 ), cue.userData.body.angle );
-   cue.matrix.compose(cursorPos, cursorQuat, cursorScale);
-   cue.applyMatrix4( court.matrixWorld );
-
-   //Get cursor matrix to use in calculating where cue physics body should be updated to
-   cursorMat.getInverse( court.matrixWorld );
-   cursorMat.multiply( reticle.matrixWorld );     
-   cursorMat.decompose( cursorPos, cursorQuat, cursorScale );
-   cursorEuler.setFromQuaternion( cursorQuat );
-
-   //Set angle of cue
-   let angle = cursorQuat.angleTo(new THREE.Quaternion()) * Math.sign(cursorEuler.y);
-   if(angle < -Math.PI/2 && angle > -Math.PI){
-     cue.userData.body.angle = 3 * Math.PI / 4 - angle
-   }else if(Math.abs(angle) > Math.PI/2){
-     cue.userData.body.angle = 3 * Math.PI / 4 - cursorQuat.angleTo(new THREE.Quaternion())
-   }else{
-     cue.userData.body.angle = 3 * Math.PI / 4 - cursorEuler.y;
-   }
-
-   //Update cue velocity based on difference between current reticle position and last cue position
-   let deltaPos = [0,0];
-   if(DEV_MODE){
-     if(oppositeSideInPlay){
-       vec2.sub(deltaPos, [cursorPos.x, cursorPos.z], cue.userData.body.position);
-       vec2.set( cue.userData.body.velocity, deltaPos[0]*10, deltaPos[1]*10);
-     }else{
-       vec2.sub(deltaPos, [cursorPos.x, cursorPos.z], cue.userData.body.position);
-       vec2.set( cue.userData.body.velocity, deltaPos[0]*10, deltaPos[1]*10);
-     }
-   }else{
-     vec2.sub(deltaPos, [cursorPos.x, cursorPos.z], cue.userData.body.position);
-     vec2.set( cue.userData.body.velocity, deltaPos[0]*5, deltaPos[1]*5);
-   }
-
-   //Test if currentDisc has been thrown
-   if( currentControl == 'throw' && discs[ currentTurnNumber ].status == 'oncue'){
-     testForThrownDisc();
-   }else if( currentControl == 'throw' && discs[ currentTurnNumber ].status == 'inplay' ){
-     testForThrowOver();
-   }
  }
 
  function onWindowResize() {
-
    camera.aspect = window.innerWidth / window.innerHeight;
    camera.updateProjectionMatrix();
-
    renderer.setSize( window.innerWidth, window.innerHeight );
-
  }
 
  function addAnchor(){
@@ -436,14 +366,6 @@
    setTimeout( () => {
      lockUI = false;
    }, 40 );
- }
-
- function disposeObject(objThree, rigidBodiesIndex){
-   physicsWorld.removeRigidBody(objThree.userData.body);
-   scene.remove(objThree);
-   if(rigidBodiesIndex !== undefined){
-     rigidBodies.splice(rigidBodiesIndex, 1);
-   }
  }
 
  function initStats(){
@@ -594,57 +516,12 @@
  }
 
  function initCue(){
-   /*
-   world.solver.iterations = 20;
-   world.solver.tolerance = 0.01;
-   world.islandSplit = true;
-*/
-   
-   let cueMaterial = new THREE.MeshBasicMaterial( {color: 0xff00ff} );
-   cue = new THREE.Group();
-
-   let armWidth = cueWidth / 2;
-   let cueArmOffset = armWidth/2 - cueDepth/2;
-   
-   let cue1 = new THREE.Mesh(
-     new THREE.BoxBufferGeometry(armWidth, cueHeight, cueDepth).translate(-cueArmOffset, cueHeight/2, 0),
-     cueMaterial
-   );
-   let cue2 = new THREE.Mesh(
-     new THREE.BoxBufferGeometry(cueDepth, cueHeight, armWidth).translate(0, cueHeight/2, cueArmOffset),
-     cueMaterial
-   );
-   cue.add( cue1 );
-   cue.add( cue2 );
-   cue.material = cueMaterial;
-   scene.add(cue);
-   let cueX = 0,
-       cueY = 0;
-   cue.matrixAutoUpdate = false;
-   cue.matrix.setPosition(cueX, discHeight, cueY);
-   cue.applyMatrix4( reticle.matrix );
-
-   cueShape1 = new Box({width: armWidth, height: cueDepth});
-   cueShape2 = new Box({height: armWidth, width: cueDepth});
-
-   let cueBody = new Body({
-     position: [cueX, cueY],
-     allowSleep: false,
-     fixedRotation: true,
-     angle: 3 * Math.PI / 4,
-     type: Body.KINEMATIC,
-   });
-   cueBody.addShape( cueShape1, [-cueArmOffset, 0])
-   cueBody.addShape( cueShape2, [0, cueArmOffset] );
-   world.addBody( cueBody );
-
-   cueBody.angularDamping = .6;
-   cueBody.damping = .3;
-
-   cue.userData.body = cueBody
-
-   window.cue = cue;
+   cue = new Cue(cueWidth, cueHeight, cueDepth, reticle.matrix, discHeight, reticle, DEV_MODE)
+   scene.add(cue.cueGraphics);
+   world.addBody(cue.cueBody);
+   window.cue = cue.cueGraphics;
    showCue = true;
+   cue.setCollisions(currentPlayer);
  }
 
  function setDiscsDamping( val ){
@@ -652,25 +529,6 @@
      val = Math.max(Math.min(val, 1), 0);
      d.userData.body.damping = val;
    });
- }
-
- function setCueCollisions(){
-   if(currentPlayer == 'red'){
-     cueShape1.collisionGroup = REDCUE;
-     cueShape1.collisionMask = REDDISCS;
-     cueShape2.collisionGroup = REDCUE;
-     cueShape2.collisionMask = REDDISCS; 
-   }else if(currentPlayer == 'blue'){
-     cueShape1.collisionGroup = BLUECUE;
-     cueShape1.collisionMask = BLUEDISCS;
-     cueShape2.collisionGroup = BLUECUE;
-     cueShape2.collisionMask = BLUEDISCS;
-   }else{
-     cueShape1.collisionGroup = BLUECUE | REDCUE;
-     cueShape1.collisionMask = BLUEDISCS | REDDISCS;
-     cueShape2.collisionGroup = BLUECUE | REDCUE;
-     cueShape2.collisionMask = BLUEDISCS | REDDISCS;
-   }
  }
 
  function setDiscCollisionMask(disc){
@@ -737,7 +595,7 @@
    }else{
      cue.material.color.setHex( 0x0000ff );
    }
-   setCueCollisions();
+   cue.setCollisions(currentPlayer);
 
    if(currentTurnNumber > 0){
      discs[currentTurnNumber - 1].status = 'inplay';
@@ -772,6 +630,12 @@
    currentTurnNumber++;
    dispatch('changeControls', { controlType: 'throw' });
    startPlayerTurn();
+ }
+
+ export function handleSwitchPlayerDevices(){
+   currentTurnNumber++;
+   dispatch('changeControls', { controlType: 'throw' });
+   startPlayerTurn();   
  }
 
  function handleRoundOver(){
@@ -865,17 +729,6 @@
 
      inPlayLine = ( .5 - leftLineX / imageCourtWidth ) * courtLength;
    });
-
-   /*
-   world.on("beginContact",function(event){
-     if(event.shapeA instanceof Convex || event.shapeB instanceof Convex)
-       console.log(event.shapeA, event.shapeB)
-   });
-   */
-
-   
-   window.scoreAreas = scoreAreas;
-   window.world = world
  }
 
  function getRoundScore(){
@@ -929,6 +782,7 @@
        promptPlayerTransition();
      }else{
        //TODO -- how to handle throw over when 2 players?
+       //handleSwitchPlayerDevices();
      }
    }
    //overlayComponent.setDiscControlDisplayState(false);
@@ -936,10 +790,7 @@
  }
 
  function promptPlayerTransition(){
-   //TODO - lock screen from interactions and from cue colliding, show prompt to hand over device
-   cueShape1.collisionMask = 0;
-   cueShape2.collisionMask = 0;
-
+   cue.disable();
    let nextPlayer = currentPlayer == 'red' ? 'blue' : 'red';
    dispatch( 'switchPlayers', {nextPlayer} );
  }
@@ -967,31 +818,31 @@
    //Initializes key listeners used during dev mode, used for moving cue with arrow keys
    let d = .025
    document.addEventListener('keydown', event => {
-     reticle.getWorldPosition(cursorPos)
+     reticle.getWorldPosition(cue.cursorPos)
      let f = 20;
      switch(event.which){
        case 38:
          //up
          if(event.shiftKey) applyForceToThrownDisc([0, -1])
-         cursorPos.z -= d
+         cue.cursorPos.z -= d
          break;
        case 40:
          //down
          if(event.shiftKey) applyForceToThrownDisc([0, 1])
-         cursorPos.z += d
+         cue.cursorPos.z += d
          break;
        case 37:
          //left
          if(event.shiftKey) applyForceToThrownDisc([-1, 0])
-         cursorPos.x -= d;
+         cue.cursorPos.x -= d;
          break;
        case 39:
          //right
          if(event.shiftKey) applyForceToThrownDisc([1, 0])
-         cursorPos.x += d;
+         cue.cursorPos.x += d;
          break;
      }
-     reticle.matrix.setPosition(cursorPos.x, cursorPos.y, cursorPos.z)
+     reticle.matrix.setPosition(cue.cursorPos.x, cue.cursorPos.y, cue.cursorPos.z)
    });
  }
 
@@ -1061,14 +912,14 @@
    }
    axios.get(serverLoadURL)
         .then(response => {
-          syncGame(response.data);
+          handleLoadGameData(response.data);
           console.log('loaded')
         }).catch( error => {
           console.log('Error loading game: ', error)
         });
  }
 
- function syncGame(gameData){
+ function handleLoadGameData(gameData){
    dispatch('changeControls', { controlType: 'throw' });
    currentPlayer = gameData.currentPlayer;
    currentTurnNumber = gameData.currentTurnNumber;
@@ -1112,6 +963,24 @@
    dispatch('setScore', {red: gameData.gameScore.red, blue: gameData.gameScore.blue});
    startPlayerTurn();
    //TODO - set game scale
+ }
+
+ export function updateGameFromData(data){
+   if(!courtSet) return
+   let _discs = data.discs;
+   let _cue = data.cue;
+   for(let i = 0; i < _discs.length; i++){
+     discs[i].userData.body.interpolatedPosition[0] = _discs[i].position[0];
+     discs[i].userData.body.interpolatedPosition[1] = _discs[i].position[1];
+     discs[i].visible = _discs[i].visible;
+   }
+ }
+
+ export let updateOtherDeviceWorld;//function passed in from App.svelte
+ export let updateOtherDeviceGame;//function passed in from App.svelte
+
+ function handleSwitchPlayeDevices(){
+   //TODO
  }
 
  window.saveGame = saveGame;
