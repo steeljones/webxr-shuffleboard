@@ -62,7 +62,6 @@ export default class {
    //Update cue position and angle based on the reticle position and angle
    //Get previous cue physics body position and angle and use it to update graphics
    this.cursorPos.set( this.cueBody.interpolatedPosition[0], this.discHeight, this.cueBody.interpolatedPosition[1] );
-   //cursorScale.set(1, 1, 1);
    this.cursorQuat.setFromAxisAngle( new THREE.Vector3( 0, -1, 0 ), this.cueBody.angle );
    this.cueGraphics.matrix.compose(this.cursorPos, this.cursorQuat, this.cursorScale);
    this.cueGraphics.applyMatrix4( courtMatrixWorld );

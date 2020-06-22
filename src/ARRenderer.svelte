@@ -12,14 +12,14 @@
  export let DEBUG_MODE;
   
  import * as THREE from 'three';
- import { Body, World, Circle, Plane, Box, Convex, ContactMaterial, Material, vec2 } from "p2";
+ import { Body, World, Circle, Box, ContactMaterial, Material, vec2 } from "p2";
  import Stats from 'stats-js';
  import axios from 'axios';
- import { createEventDispatcher, tick } from 'svelte';
- import Cue from './Cue'
+ import { createEventDispatcher, onMount, tick } from 'svelte';
+ import Cue from './Cue';
+ import Court from './Court';
  import { SCORINGAREAS, BOUNDS, REDCUE, BLUECUE, REDDISCS, BLUEDISCS } from './collisionConstants';
 
- import scoringAreas from './scoringAreas';
  const dispatch = createEventDispatcher();
 
  const serverURL = window.location.protocol == 'http'
@@ -77,10 +77,6 @@
  //Game state / game scoring variables
  let currentPlayer = 'open';
  let currentTurnNumber;
- //Areas on the court worth specific point values
- let scoreAreas = [];
- //The line on the court that a disc must cross to be considered in play
- let inPlayLine; //
  //Number of points to win
  let scoreThreshold = 21;
  //Variable to control which side of court is in play - 
@@ -205,10 +201,8 @@
    switch ( currentControl ){
      case 'court':
        if ( reticle.visible) {
-         addCourtSensors();
          initDiscs();
          setCourt();
-         addBounds();
          setDiscs();
          initCue();
          reticle.material.opacity = .1;
@@ -283,8 +277,8 @@
          }
 
          if( currentControl == 'court' || currentControl == 'resetCourt'){
-           court.visible = true;
-           court.matrix.copy( reticle.matrix );
+           court.mesh.visible = true;
+           court.mesh.matrix.copy( reticle.matrix );
            
            if(!planeDetected){
              dispatch('planeDetectionStateUpdate', {planeDetected: true});
@@ -294,7 +288,7 @@
        } else {
 	 reticle.visible = false;
          if( currentControl == 'court' ){
-           court.visible = false;
+           court.mesh.visible = false;
          }
        }
      }
@@ -331,7 +325,7 @@
    world.step( fixedTimeStep, delta, maxSubSteps );
 
    if(showCue){
-     cue.update(court.matrixWorld, oppositeSideInPlay);
+     cue.update(court.mesh.matrixWorld, oppositeSideInPlay);
    }
  }
 
@@ -343,7 +337,7 @@
        discHeight,
        disc.userData.body.interpolatedPosition[1]
      )
-     disc.applyMatrix4( court.matrix );
+     disc.applyMatrix4( court.mesh.matrix );
    }
  }
 
@@ -374,25 +368,15 @@
  }
 
  function initCourt(){
-   let courtTexture = new THREE.TextureLoader().load( "court.png" );
-   courtTexture.center = new THREE.Vector2( 0.5, 0.5 );
-   courtTexture.rotation = - Math.PI / 2;
-   let courtMaterial = new THREE.MeshBasicMaterial({transparent: true, opacity: 0.2, map: courtTexture});
-   court = new THREE.Mesh(
-     //new THREE.BoxBufferGeometry(courtLength, courtHeight, courtWidth).rotateY( - Math.PI / 2 ).translate( 0, 0, - courtLength / 2 ),
-     new THREE.BoxBufferGeometry(courtWidth, courtHeight, courtLength),
-     courtMaterial );
-
-   court.matrixAutoUpdate = false;
-   window.court = court
-   court.visible = false;
-
-   scene.add(court)
+   court = new Court(courtWidth, courtHeight, courtLength, world);
+   scene.add(court.mesh)
+   court.addBounds();
+   court.addScoringSensors();
  }
 
  function setCourt(){
    dispatch('courtSet', { });
-   court.material.opacity = 1.0;
+   court.set();
    courtSet = true;
  }
 
@@ -421,16 +405,16 @@
 
  function setDiscs(){
    let pos = new THREE.Vector3();
-   court.getWorldPosition( pos );
+   court.mesh.getWorldPosition( pos );
 
    let p2Material = new Material();
    
    for( let idx = 0; idx < discs.length; idx++ ){
      let disc = discs[idx];
      let x = 0;
-     let z = oppositeSideInPlay ? -1 * (idx - 2) * courtLength / 16 : (idx - 2) * courtLength / 16;
+     let z = oppositeSideInPlay ? -1 * (idx - 2) * court.length / 16 : (idx - 2) * court.length / 16;
      disc.position.set(x, .6, z)
-     disc.applyMatrix4( court.matrixWorld );
+     disc.applyMatrix4( court.mesh.matrixWorld );
      
      let circleShape = new Circle({radius: discRadius})
      circleShape.threeObj = disc;
@@ -468,37 +452,6 @@
    giveDiscsRandomMotion();
    window.discs = discs
  }
- 
-
- function addBounds(){
-   let restitution = 1;
-   let wallDepth = .05;
-   let hwd = wallDepth / 2;
-   let xCoord = courtWidth / 2 * 1.5;
-   let yCoord = courtLength /2 * 1.5;
-   let wallParams = [
-     //Bottom wall
-     [0, -yCoord, 0],
-     //Left
-     [-xCoord, 0, -Math.PI / 2],
-     //top
-     [0, yCoord, Math.PI],
-     //right
-     [xCoord, 0, Math.PI / 2],
-   ];
-   wallParams.forEach( (w, idx) => {
-     let plane = new Body({
-       position: w.slice(0, 2),
-       angle: w[2],
-     });
-     let planeShape = new Plane();
-     planeShape.collisionGroup = BOUNDS
-     planeShape.collisionMask = REDDISCS | BLUEDISCS;
-     plane.addShape( planeShape );
-     plane.damping = 0;
-     world.addBody( plane );
-   });
- }
 
  function giveDiscsRandomMotion(){
    discs.forEach( disc => {
@@ -519,7 +472,6 @@
    cue = new Cue(cueWidth, cueHeight, cueDepth, reticle.matrix, discHeight, reticle, DEV_MODE)
    scene.add(cue.cueGraphics);
    world.addBody(cue.cueBody);
-   window.cue = cue.cueGraphics;
    showCue = true;
    cue.setCollisions(currentPlayer);
  }
@@ -563,9 +515,9 @@
      disc.visible = false;
      disc.userData.body.position[0] = 0;
      if(oppositeSideInPlay){
-       disc.userData.body.position[1] = courtLength / 2 * .8 * -1;
+       disc.userData.body.position[1] = court.length / 2 * .8 * -1;
      }else{
-       disc.userData.body.position[1] = courtLength / 2 * .8;
+       disc.userData.body.position[1] = court.length / 2 * .8;
      }
      disc.userData.body.velocity[0] = 0;
      disc.userData.body.velocity[1] = 0;
@@ -579,9 +531,9 @@
    let disc = discs[ currentTurnNumber ];
    disc.userData.body.position[0] = 0;
    if(oppositeSideInPlay){
-     disc.userData.body.position[1] = courtLength / 2 * .8 * -1;
+     disc.userData.body.position[1] = court.length / 2 * .8 * -1;
    }else{
-     disc.userData.body.position[1] = courtLength / 2 * .8;
+     disc.userData.body.position[1] = court.length / 2 * .8;
    }
    disc.userData.body.velocity[0] = 0;
    disc.userData.body.velocity[1] = 0;
@@ -639,7 +591,7 @@
  }
 
  function handleRoundOver(){
-   let { sensorOverlaps, roundScore } = getRoundScore()
+   let { sensorOverlaps, roundScore } = court.getRoundScore()
 
    let roundWinner, scoreDiff;
    if(roundScore.red > roundScore.blue){
@@ -688,70 +640,8 @@
  /*
     Scoring related functions
   */
- function addCourtSensors(){
-   let { imageCourtWidth, imageCourtHeight, left, leftLineX} = scoringAreas;
-   left.forEach( ({ value, vertices }) => {
-     vertices = vertices.map( ([x,y]) => {
-       //Flip the x and y, and scale to world court dimensions
-       return [
-         -1 * ( .5 - y / imageCourtHeight ) * courtWidth,
-         ( .5 - x / imageCourtWidth ) * courtLength
-       ];
-     });
-
-
-     let convexShape = new Convex({ vertices, sensor: true });
-     convexShape.collisionGroup = SCORINGAREAS;
-     convexShape.collisionMask = -1;
-     let convexBody = new Body({ mass: 0, position: [0,0] });
-     convexBody.scoreValue = value;
-     convexBody.addShape( convexShape );
-     world.addBody( convexBody );
-     scoreAreas.push( convexBody )
-
-     //Add mirrored sensors on opposite side of court
-     vertices = vertices.map( ([x,y]) => {
-       return [
-         x,
-         -1 * y
-       ];
-     });
-     vertices.reverse();
-
-     convexShape = new Convex({ vertices, sensor: true });
-     convexShape.collisionGroup = SCORINGAREAS;
-     convexShape.collisionMask = -1;
-     convexBody = new Body({ mass: 0, position: [0,0] });
-     convexBody.scoreValue = value;
-     convexBody.addShape( convexShape );
-     world.addBody( convexBody );
-     scoreAreas.push( convexBody )
-
-     inPlayLine = ( .5 - leftLineX / imageCourtWidth ) * courtLength;
-   });
- }
-
- function getRoundScore(){
-   let roundScore = {red: 0, blue: 0}
-   let sensorOverlaps = [];
-   let redScore = 0,
-       blueScore = 0;
-   
-   for( let d of discs ){
-     let hitTestResult = world.hitTest(d.userData.body.position, scoreAreas);
-
-     if(hitTestResult && hitTestResult.length > 0){
-       roundScore[d.userData.discColor] += hitTestResult[0].scoreValue
-       sensorOverlaps.push({score: hitTestResult[0].scoreValue, color: d.userData.discColor})       
-     }
-   }
-   roundScore.blue = Math.max(roundScore.blue, 0)
-   roundScore.red = Math.max(roundScore.red, 0)
-   return { sensorOverlaps, roundScore }
- }
-
  function testForThrownDisc(){
-   if( Math.abs(discs[currentTurnNumber].userData.body.position[1]) < inPlayLine ){
+   if( Math.abs(discs[currentTurnNumber].userData.body.position[1]) < court.inPlayLine ){
      handleThrownDisc();
    }
  }
@@ -847,7 +737,7 @@
  }
 
  function handleGameScaleChange(){
-   let scaleFactor = 1.5 * gameScale / courtWidth
+   let scaleFactor = 1.5 * gameScale / court.width
    courtWidth = 1.5 * gameScale;
    courtLength = 9.1 * gameScale;
    discRadius = .1 * gameScale;
@@ -856,7 +746,7 @@
    cueHeight = discRadius / 4;
    cueDepth = discRadius / 2;
    devModeCueOffset = -courtLength * .425;
-   court.geometry.scale( scaleFactor, 1, scaleFactor )
+   court.mesh.geometry.scale( scaleFactor, 1, scaleFactor )
  }
 
  export function applyForceToThrownDisc([xFactor, yFactor]){
@@ -874,7 +764,7 @@
 
  function resetCourt(){
    dispatch('resetCourt', {});
-   court.material.opacity = 1.0;
+   court.set();
    courtSet = true;
    for(let d of discs){
      if(d.status != 'inactive'){
@@ -949,9 +839,9 @@
        d.status = 'inactive';
        d.userData.body.position[0] = 0;
        if(oppositeSideInPlay){
-         d.userData.body.position[1] = courtLength / 2 * .8 * -1;
+         d.userData.body.position[1] = court.length / 2 * .8 * -1;
        }else{
-         d.userData.body.position[1] = courtLength / 2 * .8;
+         d.userData.body.position[1] = court.length / 2 * .8;
        }
        d.userData.body.velocity[0] = 0;
        d.userData.body.velocity[1] = 0;
