@@ -18,11 +18,12 @@
  import { createEventDispatcher, onMount, tick } from 'svelte';
  import Cue from './Cue';
  import Court from './Court';
+ import Disc from './Disc';
  import { SCORINGAREAS, BOUNDS, REDCUE, BLUECUE, REDDISCS, BLUEDISCS } from './collisionConstants';
 
  const dispatch = createEventDispatcher();
 
- const serverURL = window.location.protocol == 'http'
+ const serverURL = window.location.protocol == 'http:'
                  ? window.location.origin.replace(window.location.port, 3000)
                  : 'https://' + window.location.hostname + ':3001';
  const serverSaveURL = serverURL + '/saveGame'
@@ -100,7 +101,7 @@
    if(currentControl == 'resetCourt'){
      courtSet = false;
      for(let d of discs){
-       d.visible = false;
+       d.mesh.visible = false;
      }
    }
  }
@@ -192,7 +193,6 @@
    scene.add( anchor );
 
    window.reticle = reticle;
-   window.THREE = THREE;
  }
 
  function handleSelect(event) {
@@ -215,7 +215,8 @@
        if(DEV_MODE && discs[ currentTurnNumber ].status != 'inplay'){
          throwCurrentDisc();
        }else if( discs[ currentTurnNumber ].status != 'inplay'){
-         resetCurrentDisc();
+         //Reset the current disc
+         discs[ currentTurnNumber ].reset(court.length, oppositeSideInPlay, true)
        }else{
          applyForceToThrownDisc([-1, -1])
        }
@@ -332,12 +333,12 @@
  function updateDiscGraphics(){
 
    for( let disc of discs ){
-     disc.position.set(
-       disc.userData.body.interpolatedPosition[0],
+     disc.mesh.position.set(
+       disc.body.interpolatedPosition[0],
        discHeight,
-       disc.userData.body.interpolatedPosition[1]
+       disc.body.interpolatedPosition[1]
      )
-     disc.applyMatrix4( court.mesh.matrix );
+     disc.mesh.applyMatrix4( court.mesh.matrix );
    }
  }
 
@@ -381,23 +382,15 @@
  }
 
  function initDiscs(){
+   //All discs use same geometry and p2Material
    let discGeometry = new THREE.CylinderBufferGeometry( discRadius, discRadius, discHeight, 32, 1 );
-
+   let p2Material = new Material();
+   
    for(let i = 0; i < numDiscs; i++) {
-     let material = new THREE.MeshBasicMaterial( );
-     let disc = new THREE.Mesh( discGeometry, material );
-     //disc.userData.discNumber = i;
-     disc.visible = false;
-
-     if(i % 2 == 0){
-       disc.material.color.setHex(0xff0000);
-       disc.userData.discColor = 'red';
-     }else{
-       disc.material.color.setHex(0x0000ff);
-       disc.userData.discColor = 'blue'
-     }
-
-     scene.add(disc);     
+     let color = i % 2 ? 'red' : 'blue'
+     let disc = new Disc(discGeometry, color, discRadius, discMass, discDamping, p2Material);
+     scene.add(disc.mesh);
+     world.addBody( disc.body )
      discs.push( disc );
    }
  }
@@ -406,45 +399,17 @@
  function setDiscs(){
    let pos = new THREE.Vector3();
    court.mesh.getWorldPosition( pos );
-
-   let p2Material = new Material();
    
    for( let idx = 0; idx < discs.length; idx++ ){
      let disc = discs[idx];
      let x = 0;
      let z = oppositeSideInPlay ? -1 * (idx - 2) * court.length / 16 : (idx - 2) * court.length / 16;
-     disc.position.set(x, .6, z)
-     disc.applyMatrix4( court.mesh.matrixWorld );
-     
-     let circleShape = new Circle({radius: discRadius})
-     circleShape.threeObj = disc;
-     if(disc.userData.discColor == 'red'){
-       circleShape.collisionGroup = REDDISCS;
-     }else{
-       circleShape.collisionGroup = BLUEDISCS;
-     }
-     let circleBody = new Body({mass: discMass, position: [x, z], allowSleep: false, fixedRotation: true});
-
-     //circleShape1.material = new p2.Material();
-     circleShape.material = p2Material;
-
-     circleBody.addShape( circleShape );
-     circleBody.damping = discDamping;
-     circleBody.sleepSpeedLimit = .05;
-     circleBody.sleepTimeLimit =  .4;
-     //circleBody.sleepTimeLimit =  .5;
-     
-     world.addBody( circleBody );
-     disc.userData.body = circleBody;
-     disc.userData.shape = circleShape;
-     disc.visible = true;
-     //disc.status = 'inactive';
-     disc.status = 'open';
-     setDiscCollisionMask(disc);
+     disc.set(x, z, court.mesh.matrixWorld)
+     disc.setCollisionMask();
     }
 
    if(discs.length > 1){
-     world.addContactMaterial(new ContactMaterial(discs[0].userData.shape.material, discs[1].userData.shape.material, {
+     world.addContactMaterial(new ContactMaterial(discs[0].shape.material, discs[1].shape.material, {
        restitution : discRestitution
      }));
    }
@@ -455,21 +420,12 @@
 
  function giveDiscsRandomMotion(){
    discs.forEach( disc => {
-     let body = disc.userData.body;
-     let v = {x: (Math.random() - 0.5) , y: (Math.random() - 0.5)  };
-     //Matter.Body.setVelocity( body, v );
-     disc.userData.body.force = [v.x*2, v.y* 2];
+     disc.randomMotion();
    });
  }
 
- function throwRandomDisc(){
-   let disc = discs[Math.floor(Math.random() * discs.length)];
-   let v = {x: (Math.random() - 0.5) , y: Math.random() > 0.5 ? 1 : -1};
-   disc.userData.body.force = [v.x * 10, v.y * 40]
- }
-
  function initCue(){
-   cue = new Cue(cueWidth, cueHeight, cueDepth, reticle.matrix, discHeight, reticle, DEV_MODE)
+   cue = new Cue(cueWidth, cueHeight, cueDepth, discHeight, reticle, DEV_MODE)
    scene.add(cue.cueGraphics);
    world.addBody(cue.cueBody);
    showCue = true;
@@ -479,24 +435,8 @@
  function setDiscsDamping( val ){
    discs.forEach( d => {
      val = Math.max(Math.min(val, 1), 0);
-     d.userData.body.damping = val;
+     d.body.damping = val;
    });
- }
-
- function setDiscCollisionMask(disc){
-   if(disc.status == 'inactive'){
-     disc.userData.shape.collisionMask = 0;
-   }else if(disc.status == 'oncue'){
-     disc.userData.shape.collisionMask = disc.userData.discColor == 'red'
-                                       ? REDDISCS | BLUEDISCS | REDCUE | BOUNDS
-                                       : REDDISCS | BLUEDISCS | BLUECUE | BOUNDS;
-   }else if(disc.status == 'inplay'){
-     disc.userData.shape.collisionMask = disc.userData.discColor == 'red'
-                                       ? REDDISCS | BLUEDISCS | BOUNDS | SCORINGAREAS
-                                       : REDDISCS | BLUEDISCS |  BOUNDS | SCORINGAREAS;
-   }else if(disc.status == 'open'){
-     disc.userData.shape.collisionMask = -1;
-   }
  }
 
  function startGame(){
@@ -511,36 +451,12 @@
    }
    currentTurnNumber = 0;
    for( let disc of discs ){
-     disc.status = 'inactive';
-     disc.visible = false;
-     disc.userData.body.position[0] = 0;
-     if(oppositeSideInPlay){
-       disc.userData.body.position[1] = court.length / 2 * .8 * -1;
-     }else{
-       disc.userData.body.position[1] = court.length / 2 * .8;
-     }
-     disc.userData.body.velocity[0] = 0;
-     disc.userData.body.velocity[1] = 0;
-     disc.userData.body.allowSleep = true;
-     disc.userData.body.sleep();
-     setDiscCollisionMask( disc );
+     disc.reset(court.length, oppositeSideInPlay, false)
    }
- }
-
- function resetCurrentDisc(){
-   let disc = discs[ currentTurnNumber ];
-   disc.userData.body.position[0] = 0;
-   if(oppositeSideInPlay){
-     disc.userData.body.position[1] = court.length / 2 * .8 * -1;
-   }else{
-     disc.userData.body.position[1] = court.length / 2 * .8;
-   }
-   disc.userData.body.velocity[0] = 0;
-   disc.userData.body.velocity[1] = 0;
  }
 
  function startPlayerTurn(){
-   currentPlayer = discs[ currentTurnNumber ].userData.discColor;
+   currentPlayer = discs[ currentTurnNumber ].discColor;
    overlayComponent.setCurrentPlayer( currentPlayer );
    if( currentPlayer == 'red'){
      cue.material.color.setHex( 0xff0000 );
@@ -551,31 +467,21 @@
 
    if(currentTurnNumber > 0){
      discs[currentTurnNumber - 1].status = 'inplay';
-     setDiscCollisionMask( discs[currentTurnNumber - 1] );
+     discs[currentTurnNumber - 1].setCollisionMask();
    }
-   discs[currentTurnNumber].visible = 'true';
-   discs[currentTurnNumber].status = 'oncue';
-   discs[currentTurnNumber].userData.body.wakeUp();
-   discs[currentTurnNumber].userData.body.allowSleep = false;
-   setDiscCollisionMask( discs[currentTurnNumber] );
+   discs[ currentTurnNumber ].startTurn();
  }
 
  function throwCurrentDisc(){
-   if(Math.abs(discs[ currentTurnNumber ].userData.body.velocity[1]) > .05){
-     discs[ currentTurnNumber ].userData.body.force[1] += .1 * (oppositeSideInPlay ? 1 : -1)
+   if(Math.abs(discs[ currentTurnNumber ].body.velocity[1]) > .05){
+     discs[ currentTurnNumber ].body.force[1] += .1 * (oppositeSideInPlay ? 1 : -1)
      return
    }
-   if(oppositeSideInPlay){
-     discs[ currentTurnNumber ].userData.body.force = [
-       (Math.random() - 0.5) * 6 * gameScale,
-       (Math.random() * 8.0+ 16.5) * gameScale * 2
-     ];
-   }else{
-     discs[ currentTurnNumber ].userData.body.force = [
-       (Math.random() - 0.5) * 6 * gameScale,
-       - (Math.random() * 8.0+ 16.5) * gameScale * 2
-     ];
-   }
+   let xf = (Math.random() - 0.5) * 6 * gameScale;
+   let yf = oppositeSideInPlay
+          ? (Math.random() * 8.0+ 16.5) * gameScale * 2
+          : -(Math.random() * 8.0+ 16.5) * gameScale * 2;
+   discs[ currentTurnNumber ].mockThrow(xf, yf);
  }
 
  export function moveOnToNextTurn(){
@@ -628,7 +534,7 @@
    dispatch('startRound', {});
    
    //set next player to the winner of previous round
-   if( previousRoundWinner != discs[0].userData.discColor ){
+   if( previousRoundWinner != discs[0].discColor ){
      discs.push( discs.shift() );
    }
 
@@ -637,24 +543,19 @@
  }
 
 
- /*
-    Scoring related functions
-  */
  function testForThrownDisc(){
-   if( Math.abs(discs[currentTurnNumber].userData.body.position[1]) < court.inPlayLine ){
+   if( Math.abs(discs[currentTurnNumber].body.position[1]) < court.inPlayLine ){
      handleThrownDisc();
    }
  }
 
  function handleThrownDisc(){
-   discs[currentTurnNumber].status = 'inplay'
-   discs[currentTurnNumber].userData.body.allowSleep = true;
-   setDiscCollisionMask( discs[ currentTurnNumber ] )
+   discs[currentTurnNumber].setToInPlay();
    dispatch('updateDiscInPlayStatus', {status: true});
  }
 
  function testForThrowOver(){
-   let sleepStatus = discs.map(d => d.userData.body.sleepState)
+   let sleepStatus = discs.map(d => d.body.sleepState)
    if( sleepStatus.every( s => s === Body.SLEEPING ) ){
      handleThrowOver();
    }
@@ -697,8 +598,7 @@
      dispatch('gameOver', {winner: 'blue'})
    }
    for( let disc of discs ){
-     disc.status = 'open';
-     setDiscCollisionMask( disc );
+     disc.handleGameOver();
    }
    currentTurnNumber = 0;
    oppositeSideInPlay = false;
@@ -708,6 +608,7 @@
    //Initializes key listeners used during dev mode, used for moving cue with arrow keys
    let d = .025
    document.addEventListener('keydown', event => {
+     if(!cue) return
      reticle.getWorldPosition(cue.cursorPos)
      let f = 20;
      switch(event.which){
@@ -750,16 +651,7 @@
  }
 
  export function applyForceToThrownDisc([xFactor, yFactor]){
-   let f = (yFactor == 1 && xFactor == 0) ? .01 : .03
-
-   if( oppositeSideInPlay ){
-     discs[ currentTurnNumber ].userData.body.force[0] = xFactor * f * -1;
-     discs[ currentTurnNumber ].userData.body.force[1] = yFactor * f;
-   }else{
-     discs[ currentTurnNumber ].userData.body.force[0] = xFactor * f;
-     discs[ currentTurnNumber ].userData.body.force[1] = yFactor * f * -1;
-   }
-
+   discs[ currentTurnNumber ].nudge([xFactor, yFactor]);
  }
 
  function resetCourt(){
@@ -768,7 +660,7 @@
    courtSet = true;
    for(let d of discs){
      if(d.status != 'inactive'){
-       d.visible = true;
+       d.mesh.visible = true;
      }
    }
  }
@@ -781,7 +673,7 @@
    let data = {
      gameScore,
      gameScale,
-     discPositions: discs.map(d => d.userData.body.position),
+     discPositions: discs.map(d => d.body.position),
      currentPlayer,
      currentTurnNumber,
      oppositeSideInPlay
@@ -800,6 +692,7 @@
      console.log('Can\'t load game if court is not set')
      return
    }
+   console.log(serverLoadURL)
    axios.get(serverLoadURL)
         .then(response => {
           handleLoadGameData(response.data);
@@ -816,39 +709,13 @@
    oppositeSideInPlay = gameData.oppositeSideInPlay;
    let discPositions = gameData.discPositions;
 
-   if( currentPlayer != discs[currentTurnNumber].userData.discColor ){
+   if( currentPlayer != discs[currentTurnNumber].discColor ){
      discs.push( discs.shift() );
    }
 
    for(let i = 0; i < discs.length; i++){
      let d = discs[ i ];
-     d.userData.body.velocity[0] = 0;
-     d.userData.body.velocity[1] = 0;
-     if(i < currentTurnNumber){
-       d.userData.body.position = discPositions[i];
-       d.userData.body.wakeUp();
-       d.userData.body.allowSleep = true;
-       d.visible = true;
-       d.status = 'inplay';
-     }else if(i == currentTurnNumber){
-       d.status = 'oncue';
-       d.visible = true;
-       d.userData.body.position = discPositions[i];
-     }else{
-       d.visible = false;
-       d.status = 'inactive';
-       d.userData.body.position[0] = 0;
-       if(oppositeSideInPlay){
-         d.userData.body.position[1] = court.length / 2 * .8 * -1;
-       }else{
-         d.userData.body.position[1] = court.length / 2 * .8;
-       }
-       d.userData.body.velocity[0] = 0;
-       d.userData.body.velocity[1] = 0;
-       d.userData.body.allowSleep = true;
-       d.userData.body.sleep();
-     }
-     setDiscCollisionMask( d );
+     d.setFromLoadData(discPositions[i], i, currentTurnNumber, oppositeSideInPlay, court.length);
    }
    dispatch('setScore', {red: gameData.gameScore.red, blue: gameData.gameScore.blue});
    startPlayerTurn();
@@ -860,9 +727,7 @@
    let _discs = data.discs;
    let _cue = data.cue;
    for(let i = 0; i < _discs.length; i++){
-     discs[i].userData.body.interpolatedPosition[0] = _discs[i].position[0];
-     discs[i].userData.body.interpolatedPosition[1] = _discs[i].position[1];
-     discs[i].visible = _discs[i].visible;
+     discs[i].setFromNetworkData(_discs[i]);
    }
  }
 

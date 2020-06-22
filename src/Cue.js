@@ -3,7 +3,7 @@ import { Body, Box, vec2 } from "p2";
 import { SCORINGAREAS, BOUNDS, REDCUE, BLUECUE, REDDISCS, BLUEDISCS } from './collisionConstants';
 
 export default class {
-  constructor(width, height, depth, transformMatrix, discHeight, reticle, DEV_MODE){
+  constructor(width, height, depth, discHeight, reticle, DEV_MODE){
     this.width = width;
     this.height = height;
     this.depth = depth;
@@ -40,7 +40,7 @@ export default class {
         cueY = 0;
     this.cueGraphics.matrixAutoUpdate = false;
     this.cueGraphics.matrix.setPosition(cueX, this.discHeight, cueY);
-    this.cueGraphics.applyMatrix4( transformMatrix );
+    this.cueGraphics.applyMatrix4( reticle.matrix );
 
     this.cueShape1 = new Box({width: armWidth, height: this.depth});
     this.cueShape2 = new Box({height: armWidth, width: this.depth});
