@@ -85,6 +85,8 @@
  let planeDetected = false;
  
  let lockUI = false;
+ let updateCounter = 0;
+ let framesPerUpdate = 10;
 
   //Debug info/stats
  let stats;
@@ -209,7 +211,11 @@
        }
        break;
      case 'inactive':
-       startGame();
+       if(numberDevices == 1){
+         startGame();
+       }else{
+         startMultiDeviceGame();
+       }
        break;
      case 'throw':
        if(DEV_MODE && discs[ currentTurnNumber ].status != 'inplay'){
@@ -297,16 +303,22 @@
 
    let dt = clock.getDelta();
    if(courtSet){
-     if(numberDevices == 2 && devicePlayerColor == currentPlayer){
+     if( numberDevices == 2 ){
        updatePhysics(dt);
-       updateOtherDeviceWorld( {discs, cue:cue.cueGraphics});
-     }else if(numberDevices == 1){
+       if( devicePlayerColor == currentPlayer ){
+         updateCounter++;
+         if(updateCounter >= framesPerUpdate){
+           updateOtherDeviceWorld( {discs, cue} );
+           updateCounter = 0;
+         }
+       }
+     }else if(numberDevices == 1 || currentPlayer == 'open'){
        updatePhysics(dt);
      }
      updateDiscGraphics();
 
      //Tests for changes in game states based on disc thrown or passing in play line
-     if( currentControl == 'throw' ){
+     if( currentControl == 'throw'  && ( numberDevices == 1 || devicePlayerColor == currentPlayer ) ){
        if( discs[ currentTurnNumber ].status == 'oncue' ){
          testForThrownDisc();
        }else if( discs[ currentTurnNumber ].status == 'inplay' ){
@@ -326,7 +338,8 @@
    world.step( fixedTimeStep, delta, maxSubSteps );
 
    if(showCue){
-     cue.update(court.mesh.matrixWorld, oppositeSideInPlay);
+     let updateOnlyGraphics = !numberDevices > 1 || devicePlayerColor != currentPlayer
+     cue.update(court.mesh.matrixWorld, oppositeSideInPlay, updateOnlyGraphics);
    }
  }
 
@@ -381,7 +394,7 @@
    let p2Material = new Material();
    
    for(let i = 0; i < numDiscs; i++) {
-     let color = i % 2 ? 'red' : 'blue'
+     let color = i % 2 == 0 ? 'red' : 'blue'
      let disc = new Disc(discGeometry, discHeight, color, discRadius, discMass, discDamping, p2Material);
      scene.add(disc.mesh);
      world.addBody( disc.body )
@@ -421,7 +434,7 @@
  function initCue(){
    cue = new Cue(cueWidth, cueHeight, cueDepth, discHeight, reticle, DEV_MODE)
    scene.add(cue.cueGraphics);
-   world.addBody(cue.cueBody);
+   world.addBody(cue.body);
    showCue = true;
    cue.setCollisions(currentPlayer);
  }
@@ -433,7 +446,7 @@
    });
  }
 
- function startGame(){
+ export function startGame(){
    dispatch('startGame', {});
    resetDiscs(false);
    startPlayerTurn();
@@ -457,7 +470,15 @@
    }else{
      cue.material.color.setHex( 0x0000ff );
    }
-   cue.setCollisions(currentPlayer);
+   if( numberDevices > 1 ){
+     if(devicePlayerColor != currentPlayer){
+       setToInactiveDevice();
+     }else{
+       setToActiveDevice();
+     }
+   }else{
+     cue.setCollisions(currentPlayer);
+   }
 
    if(currentTurnNumber > 0){
      //discs[currentTurnNumber - 1].status = 'inplay';
@@ -467,6 +488,10 @@
  }
 
  function throwCurrentDisc(){
+   /* 
+      Used for dev /debugging - fakes a throw on the current disc 
+    */
+   if( numberDevices > 1 && devicePlayerColor != currentPlayer) return
    if(Math.abs(discs[ currentTurnNumber ].body.velocity[1]) > .05){
      discs[ currentTurnNumber ].body.force[1] += .1 * (oppositeSideInPlay ? 1 : -1)
      return
@@ -478,19 +503,13 @@
    discs[ currentTurnNumber ].mockThrow(xf, yf);
  }
 
- export function moveOnToNextTurn(){
+ function moveOnToNextTurn(){
    currentTurnNumber++;
    dispatch('changeControls', { controlType: 'throw' });
    startPlayerTurn();
  }
 
- export function handleSwitchPlayerDevices(){
-   currentTurnNumber++;
-   dispatch('changeControls', { controlType: 'throw' });
-   startPlayerTurn();   
- }
-
- function handleRoundOver(){
+ export function handleRoundOver(){
    let { sensorOverlaps, roundScore } = court.getRoundScore()
 
    let roundWinner, scoreDiff;
@@ -507,6 +526,11 @@
      scoreDiff = 0;
    }
 
+   if( numberDevices > 1 && devicePlayerColor == currentPlayer ){
+     updateOtherDeviceWorld( {discs, cue} );
+     updateOtherDeviceGame({event: 'roundOver'})
+   }
+
    if( testForGameOver(roundScore) ){
      dispatch('updateScore', {color: roundWinner, value: scoreDiff, gameOver: true})
      handleGameOver();
@@ -516,7 +540,7 @@
    dispatch('updateScore', {color: roundWinner, value: scoreDiff, gameOver: false})
    discs[ currentTurnNumber - 1 ].status = 'inactive'
    currentTurnNumber = 0;
-   
+
    setTimeout( () => {
      moveOnToNextRound(roundWinner)
    }, 3000 );
@@ -543,9 +567,15 @@
    }
  }
 
- function handleThrownDisc(){
+ export function handleThrownDisc(){
+   console.log('THROWN');
    discs[currentTurnNumber].setToInPlay();
-   dispatch('updateDiscInPlayStatus', {status: true});
+
+   if(numberDevices > 1 && devicePlayerColor == currentPlayer){
+     updateOtherDeviceGame({event: 'thrownDisc'});
+   }else{
+     dispatch('updateDiscInPlayStatus', {status: true});
+   }
  }
 
  function testForThrowOver(){
@@ -555,19 +585,19 @@
    }
  }
 
- function handleThrowOver(){
+ export function handleThrowOver(){
    console.log('THROW OVER')
    if(currentTurnNumber >= discs.length - 1){
      handleRoundOver()
    }else{
-     if(DEV_MODE){
+     if(DEV_MODE && numberDevices == 1){
        //webxr extension doesn't support overlay, so you can't have a button to click
        moveOnToNextTurn();
      }else if(numberDevices == 1){
        promptPlayerTransition();
      }else{
        //TODO -- how to handle throw over when 2 players?
-       //handleSwitchPlayerDevices();
+       switchToOtherDevice();
      }
    }
    //overlayComponent.setDiscControlDisplayState(false);
@@ -686,7 +716,6 @@
      console.log('Can\'t load game if court is not set')
      return
    }
-   console.log(serverLoadURL)
    axios.get(serverLoadURL)
         .then(response => {
           handleLoadGameData(response.data);
@@ -716,21 +745,43 @@
    //TODO - set game scale
  }
 
+
+ /**********************
+    Functions for multi device mode 
+  ***********************/
  export function updateGameFromData(data){
-   if(!courtSet) return
+   if( !courtSet ) return
    let _discs = data.discs;
    let _cue = data.cue;
    for(let i = 0; i < _discs.length; i++){
      discs[i].setFromNetworkData(_discs[i]);
    }
+   cue.setFromNetworkData(_cue)
+ }
+
+ function switchToOtherDevice(){
+   if(numberDevices > 1 && devicePlayerColor == currentPlayer){
+     updateOtherDeviceGame({event: 'throwOver'});
+   }
+   moveOnToNextTurn();
+ }
+
+ function startMultiDeviceGame(){
+   startGame();
+ }
+
+ function setToInactiveDevice(){
+   cue.material.opacity = 0.2;
+   cue.disable();
+ }
+
+ function setToActiveDevice(){
+   cue.material.opacity = 1.0;
+   cue.setCollisions(currentPlayer);
  }
 
  export let updateOtherDeviceWorld;//function passed in from App.svelte
  export let updateOtherDeviceGame;//function passed in from App.svelte
-
- function handleSwitchPlayeDevices(){
-   //TODO
- }
 
  window.saveGame = saveGame;
  window.loadGame = loadGame;

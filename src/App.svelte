@@ -69,7 +69,6 @@
 
  function handleChangeControls({detail={}}){
    let {controlType} = detail;
-
    if(controlType){
      lastControl = currentControl;
      currentControl = controlType;
@@ -107,6 +106,9 @@
    currentControl = 'throw';
    overlayTextState = 'clear'
    overlayComponent.reset();
+   if( numberDevices > 1 && devicePlayerColor == 'red'){
+     socket.emit('update-game', {event: 'startGame', playerColor: devicePlayerColor, gameId: currentGameId});
+   }
  }
 
  function handleStartRound(){
@@ -210,14 +212,16 @@
    window.location.hash = hash;
    currentGameId = gameId;
    console.log('joined ' + gameId + ' as player ' + playerColor)
-   if(playerColor == 'blue'){
+   if(playerColor == 'blue' && (currentControl == 'inactive' || currentControl == 'court')){
      switchToMultiDevice('blue');
    }
  }
 
  function handleNewPlayer(){
    //This only gets called for player1
-   switchToMultiDevice('red');
+   if(currentControl == 'inactive'){
+     switchToMultiDevice('red');
+   }
  }
 
  function switchToMultiDevice(_devicePlayerColor){
@@ -231,24 +235,41 @@
      gameId: currentGameId,
      discs: discs.map(d => {
        return {
-         position: d.userData.body.position,
-         visible: d.visible
+         position: d.body.position,
+         velocity: d.body.velocity,
+         visible: d.mesh.visible
        }
      }),
-     cue: cue.userData.body.position,
+     cue: {position: cue.body.position},
      playerColor: devicePlayerColor,
    })
  }
 
- function updateOtherDeviceGame(){
-   console.log('update game state')
+ function updateOtherDeviceGame( data ){
+   //TODO
+   socket.emit('update-game', {...data, playerColor: devicePlayerColor, gameId: currentGameId})
  }
 
- function handleUpdateGame(){
-   //TODO
+ function handleUpdateGame( data ){
+   //TODO -- handle update for disc thrown, throw over, turn over, etc
+   if(devicePlayerColor == data.playerColor) return
+   if( data.event == 'startGame'){
+     rendererComponent.startGame();
+   }else if (data.event == 'throwOver'){
+     rendererComponent.handleThrowOver();
+   }else if (data.event == 'thrownDisc'){
+     rendererComponent.handleThrownDisc();
+   }else if( data.event == 'roundOver'){
+     //TODO - need separate function to sync on round over
+     rendererComponent.handleRoundOver();
+   }else if( data.event == 'gameOver' ){
+     //TODO - need separate function to sync on game over
+     //rendererComponent.handleRoundOver();
+   }
  }
 
  function handleUpdateWorld( data ){
+   if(devicePlayerColor == data.playerColor) return
    rendererComponent.updateGameFromData( data );
  }
 

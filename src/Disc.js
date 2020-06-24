@@ -139,8 +139,12 @@ export default class {
   }
 
   setFromNetworkData(data){
-    this.body.interpolatedPosition[0] = data.position[0];
-    this.body.interpolatedPosition[1] = data.position[1];
+    //this.body.interpolatedPosition[0] = data.position[0];
+    //this.body.interpolatedPosition[1] = data.position[1];
+    this.body.position[0] = data.position[0];
+    this.body.position[1] = data.position[1];
+    this.body.velocity[0] = data.velocity[0];
+    this.body.velocity[1] = data.velocity[1];
     this.mesh.visible = data.visible;
   }
 

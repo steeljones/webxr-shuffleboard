@@ -19,7 +19,7 @@ export default class {
     this.cursorEuler = new THREE.Euler();
     this.zeroQuat = new THREE.Quaternion();
 
-    let cueMaterial = new THREE.MeshBasicMaterial( {color: 0xff00ff} );
+    let cueMaterial = new THREE.MeshBasicMaterial( {color: 0xff00ff, transparent: true} );
     this.cueGraphics = new THREE.Group();
 
     let armWidth = this.width / 2;
@@ -45,57 +45,65 @@ export default class {
     this.cueShape1 = new Box({width: armWidth, height: this.depth});
     this.cueShape2 = new Box({height: armWidth, width: this.depth});
 
-    this.cueBody = new Body({
+    this.body = new Body({
       position: [cueX, cueY],
       allowSleep: false,
       fixedRotation: true,
       angle: 3 * Math.PI / 4,
       type: Body.KINEMATIC,
     });
-    this.cueBody.addShape( this.cueShape1, [-cueArmOffset, 0])
-    this.cueBody.addShape( this.cueShape2, [0, cueArmOffset] );
+    this.body.addShape( this.cueShape1, [-cueArmOffset, 0])
+    this.body.addShape( this.cueShape2, [0, cueArmOffset] );
 
-    this.cueBody.angularDamping = .6;
-    this.cueBody.damping = .3;
+    this.body.angularDamping = .6;
+    this.body.damping = .3;
   }
-  update(courtMatrixWorld, oppositeSideInPlay){
-   //Update cue position and angle based on the reticle position and angle
-   //Get previous cue physics body position and angle and use it to update graphics
-   this.cursorPos.set( this.cueBody.interpolatedPosition[0], this.discHeight, this.cueBody.interpolatedPosition[1] );
-   this.cursorQuat.setFromAxisAngle( new THREE.Vector3( 0, -1, 0 ), this.cueBody.angle );
-   this.cueGraphics.matrix.compose(this.cursorPos, this.cursorQuat, this.cursorScale);
-   this.cueGraphics.applyMatrix4( courtMatrixWorld );
+  
+  update(courtMatrixWorld, oppositeSideInPlay, updateOnlyGraphics){
+    //Update cue position and angle based on the reticle position and angle
+    //Get previous cue physics body position and angle and use it to update graphics
+    this.cursorPos.set( this.body.interpolatedPosition[0], this.discHeight, this.body.interpolatedPosition[1] );
+    this.cursorQuat.setFromAxisAngle( new THREE.Vector3( 0, -1, 0 ), this.body.angle );
+    this.cueGraphics.matrix.compose(this.cursorPos, this.cursorQuat, this.cursorScale);
+    this.cueGraphics.applyMatrix4( courtMatrixWorld );
 
-   //Get cursor matrix to use in calculating where cue physics body should be updated to
-   this.cursorMat.getInverse( courtMatrixWorld );
-   this.cursorMat.multiply( this.reticle.matrixWorld );     
-   this.cursorMat.decompose( this.cursorPos, this.cursorQuat, this.cursorScale );
-   this.cursorEuler.setFromQuaternion( this.cursorQuat );
+    //If not updating physics due to being non current player in multi device mode, return here
+    if(updateOnlyGraphics){
+      this.body.velocity[0] = 0;
+      this.body.velocity[1] = 0;
+      return;
+    }
 
-   //Set angle of cue
-   let angle = this.cursorQuat.angleTo(new THREE.Quaternion()) * Math.sign(this.cursorEuler.y);
-   if(angle < -Math.PI/2 && angle > -Math.PI){
-     this.cueBody.angle = 3 * Math.PI / 4 - angle
-   }else if(Math.abs(angle) > Math.PI/2){
-     this.cueBody.angle = 3 * Math.PI / 4 - this.cursorQuat.angleTo(this.zeroQuat);
-   }else{
-     this.cueBody.angle = 3 * Math.PI / 4 - this.cursorEuler.y;
-   }
+    //Get cursor matrix to use in calculating where cue physics body should be updated to
+    this.cursorMat.getInverse( courtMatrixWorld );
+    this.cursorMat.multiply( this.reticle.matrixWorld );     
+    this.cursorMat.decompose( this.cursorPos, this.cursorQuat, this.cursorScale );
+    this.cursorEuler.setFromQuaternion( this.cursorQuat );
 
-   //Update cue velocity based on difference between current reticle position and last cue position
-   let deltaPos = [0,0];
-   if(this.DEV_MODE){
-     if(oppositeSideInPlay){
-       vec2.sub(deltaPos, [this.cursorPos.x, this.cursorPos.z], this.cueBody.position);
-       vec2.set( this.cueBody.velocity, deltaPos[0]*10, deltaPos[1]*10);
-     }else{
-       vec2.sub(deltaPos, [this.cursorPos.x, this.cursorPos.z], this.cueBody.position);
-       vec2.set( this.cueBody.velocity, deltaPos[0]*10, deltaPos[1]*10);
-     }
-   }else{
-     vec2.sub(deltaPos, [this.cursorPos.x, this.cursorPos.z], this.cueBody.position);
-     vec2.set( this.cueBody.velocity, deltaPos[0]*5, deltaPos[1]*5);
-   }
+    //Set angle of cue
+    let angle = this.cursorQuat.angleTo(new THREE.Quaternion()) * Math.sign(this.cursorEuler.y);
+    if(angle < -Math.PI/2 && angle > -Math.PI){
+      this.body.angle = 3 * Math.PI / 4 - angle
+    }else if(Math.abs(angle) > Math.PI/2){
+      this.body.angle = 3 * Math.PI / 4 - this.cursorQuat.angleTo(this.zeroQuat);
+    }else{
+      this.body.angle = 3 * Math.PI / 4 - this.cursorEuler.y;
+    }
+
+    //Update cue velocity based on difference between current reticle position and last cue position
+    let deltaPos = [0,0];
+    if(this.DEV_MODE){
+      if(oppositeSideInPlay){
+        vec2.sub(deltaPos, [this.cursorPos.x, this.cursorPos.z], this.body.position);
+        vec2.set( this.body.velocity, deltaPos[0]*10, deltaPos[1]*10);
+      }else{
+        vec2.sub(deltaPos, [this.cursorPos.x, this.cursorPos.z], this.body.position);
+        vec2.set( this.body.velocity, deltaPos[0]*10, deltaPos[1]*10);
+      }
+    }else{
+      vec2.sub(deltaPos, [this.cursorPos.x, this.cursorPos.z], this.body.position);
+      vec2.set( this.body.velocity, deltaPos[0]*5, deltaPos[1]*5);
+    }
   }
   setCollisions(currentPlayer){
     if(currentPlayer == 'red'){
@@ -118,5 +126,11 @@ export default class {
   disable(){
     this.cueShape1.collisionMask = 0;
     this.cueShape2.collisionMask = 0;
+  }
+  setFromNetworkData(data){
+    this.body.interpolatedPosition[0] = data.position[0];
+    this.body.interpolatedPosition[1] = data.position[1];
+    this.body.position[0] = data.position[0];
+    this.body.position[1] = data.position[1];
   }
 }

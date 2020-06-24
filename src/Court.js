@@ -107,11 +107,11 @@ export default class {
         blueScore = 0;
     
     for( let d of discs ){
-      let hitTestResult = this.world.hitTest(d.userData.body.position, this.scoreAreas);
+      let hitTestResult = this.world.hitTest(d.body.position, this.scoreAreas);
 
       if(hitTestResult && hitTestResult.length > 0){
-        roundScore[d.userData.discColor] += hitTestResult[0].scoreValue
-        sensorOverlaps.push({score: hitTestResult[0].scoreValue, color: d.userData.discColor})       
+        roundScore[d.discColor] += hitTestResult[0].scoreValue
+        sensorOverlaps.push({score: hitTestResult[0].scoreValue, color: d.discColor})       
       }
     }
     roundScore.blue = Math.max(roundScore.blue, 0)
